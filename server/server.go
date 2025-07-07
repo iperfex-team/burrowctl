@@ -4,9 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os/exec"
+	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -28,6 +31,23 @@ type Handler struct {
 	db       *sql.DB
 	mode     string
 	poolConf PoolConfig
+}
+
+// Estructuras para manejo de funciones
+type FunctionParam struct {
+	Type  string      `json:"type"`
+	Value interface{} `json:"value"`
+}
+
+type FunctionRequest struct {
+	Name   string          `json:"name"`
+	Params []FunctionParam `json:"params"`
+}
+
+// Struct para ejemplo (copiado de demo-func.go)
+type Person struct {
+	Name string `json:"name"`
+	Age  int    `json:"age"`
 }
 
 func NewHandler(deviceID, amqpURL, mysqlDSN, mode string, poolConf *PoolConfig) *Handler {
@@ -156,10 +176,7 @@ func (h *Handler) handleMessage(ch *amqp.Channel, msg amqp.Delivery) {
 		h.handleSQL(ch, msg, req)
 
 	case "function":
-		h.respond(ch, msg.ReplyTo, msg.CorrelationId, RPCResponse{
-			Columns: []string{"message"},
-			Rows:    [][]interface{}{{"function executed (mock)"}},
-		})
+		h.handleFunction(ch, msg, req)
 
 	case "command":
 		h.handleCommand(ch, msg, req)
@@ -348,6 +365,340 @@ func (h *Handler) handleCommand(ch *amqp.Channel, msg amqp.Delivery, req RPCRequ
 	})
 
 	log.Printf("[server] command executed successfully, returned %d lines", len(rows))
+}
+
+// handleFunction ejecuta una función remota y devuelve su resultado
+func (h *Handler) handleFunction(ch *amqp.Channel, msg amqp.Delivery, req RPCRequest) {
+	// Crear contexto con timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	log.Printf("[server] executing function: %s", req.Query)
+
+	// Parsear la solicitud de función desde req.Query
+	var funcReq FunctionRequest
+	if err := json.Unmarshal([]byte(req.Query), &funcReq); err != nil {
+		h.respond(ch, msg.ReplyTo, msg.CorrelationId, RPCResponse{
+			Error: fmt.Sprintf("invalid function request: %v", err),
+		})
+		return
+	}
+
+	// Ejecutar la función
+	result, err := h.executeFunction(ctx, funcReq)
+	if err != nil {
+		h.respond(ch, msg.ReplyTo, msg.CorrelationId, RPCResponse{
+			Error: fmt.Sprintf("function execution failed: %v", err),
+		})
+		return
+	}
+
+	// Convertir resultado a formato de respuesta
+	columns, rows := h.convertFunctionResult(result)
+
+	h.respond(ch, msg.ReplyTo, msg.CorrelationId, RPCResponse{
+		Columns: columns,
+		Rows:    rows,
+	})
+
+	log.Printf("[server] function executed successfully")
+}
+
+// executeFunction ejecuta una función por nombre usando reflection
+func (h *Handler) executeFunction(ctx context.Context, funcReq FunctionRequest) ([]interface{}, error) {
+	// Obtener la función por nombre
+	funcValue := h.getFunctionByName(funcReq.Name)
+	if !funcValue.IsValid() {
+		return nil, fmt.Errorf("function '%s' not found", funcReq.Name)
+	}
+
+	// Preparar parámetros
+	params, err := h.prepareFunctionParams(funcReq.Params, funcValue.Type())
+	if err != nil {
+		return nil, fmt.Errorf("error preparing parameters: %v", err)
+	}
+
+	// Ejecutar función
+	results := funcValue.Call(params)
+
+	// Convertir resultados a []interface{}
+	var output []interface{}
+	for _, result := range results {
+		output = append(output, result.Interface())
+	}
+
+	return output, nil
+}
+
+// getFunctionByName devuelve la función por nombre
+func (h *Handler) getFunctionByName(name string) reflect.Value {
+	// Mapa de funciones disponibles
+	functions := map[string]interface{}{
+		"returnError":       returnError,
+		"returnBool":        returnBool,
+		"returnInt":         returnInt,
+		"returnString":      returnString,
+		"returnStruct":      returnStruct,
+		"returnIntArray":    returnIntArray,
+		"returnStringArray": returnStringArray,
+		"returnJSON":        returnJSON,
+		"lengthOfString":    lengthOfString,
+		"isEven":            isEven,
+		"greetPerson":       greetPerson,
+		"sumArray":          sumArray,
+		"validateString":    validateString,
+		"complexFunction":   complexFunction,
+		"flagToPerson":      flagToPerson,
+		"modifyJSON":        modifyJSON,
+	}
+
+	if fn, exists := functions[name]; exists {
+		return reflect.ValueOf(fn)
+	}
+
+	return reflect.Value{}
+}
+
+// prepareFunctionParams convierte los parámetros al tipo correcto
+func (h *Handler) prepareFunctionParams(params []FunctionParam, funcType reflect.Type) ([]reflect.Value, error) {
+	if len(params) != funcType.NumIn() {
+		return nil, fmt.Errorf("expected %d parameters, got %d", funcType.NumIn(), len(params))
+	}
+
+	var values []reflect.Value
+	for i, param := range params {
+		expectedType := funcType.In(i)
+		value, err := h.convertToType(param.Value, expectedType)
+		if err != nil {
+			return nil, fmt.Errorf("parameter %d: %v", i, err)
+		}
+		values = append(values, value)
+	}
+
+	return values, nil
+}
+
+// convertToType convierte un valor al tipo especificado
+func (h *Handler) convertToType(value interface{}, targetType reflect.Type) (reflect.Value, error) {
+	if value == nil {
+		return reflect.Zero(targetType), nil
+	}
+
+	valueType := reflect.TypeOf(value)
+	if valueType == targetType {
+		return reflect.ValueOf(value), nil
+	}
+
+	// Conversiones específicas
+	switch targetType.Kind() {
+	case reflect.String:
+		return reflect.ValueOf(fmt.Sprintf("%v", value)), nil
+
+	case reflect.Int:
+		switch v := value.(type) {
+		case float64:
+			return reflect.ValueOf(int(v)), nil
+		case string:
+			if i, err := strconv.Atoi(v); err == nil {
+				return reflect.ValueOf(i), nil
+			}
+		}
+
+	case reflect.Bool:
+		switch v := value.(type) {
+		case string:
+			if b, err := strconv.ParseBool(v); err == nil {
+				return reflect.ValueOf(b), nil
+			}
+		}
+
+	case reflect.Slice:
+		if valueType.Kind() == reflect.Slice {
+			// Convertir slice a slice del tipo correcto
+			sourceSlice := reflect.ValueOf(value)
+			targetSlice := reflect.MakeSlice(targetType, sourceSlice.Len(), sourceSlice.Len())
+			for i := 0; i < sourceSlice.Len(); i++ {
+				convertedValue, err := h.convertToType(sourceSlice.Index(i).Interface(), targetType.Elem())
+				if err != nil {
+					return reflect.Value{}, err
+				}
+				targetSlice.Index(i).Set(convertedValue)
+			}
+			return targetSlice, nil
+		}
+
+	case reflect.Struct:
+		if targetType == reflect.TypeOf(Person{}) {
+			// Convertir a Person struct
+			if jsonData, err := json.Marshal(value); err == nil {
+				var person Person
+				if json.Unmarshal(jsonData, &person) == nil {
+					return reflect.ValueOf(person), nil
+				}
+			}
+		}
+	}
+
+	return reflect.Value{}, fmt.Errorf("cannot convert %v to %v", valueType, targetType)
+}
+
+// convertFunctionResult convierte el resultado de la función a formato de respuesta
+func (h *Handler) convertFunctionResult(results []interface{}) ([]string, [][]interface{}) {
+	if len(results) == 0 {
+		return []string{"result"}, [][]interface{}{{"no output"}}
+	}
+
+	var columns []string
+	var rows [][]interface{}
+
+	if len(results) == 1 {
+		// Un solo resultado
+		result := results[0]
+		if err, ok := result.(error); ok {
+			if err != nil {
+				columns = []string{"error"}
+				rows = [][]interface{}{{err.Error()}}
+			} else {
+				columns = []string{"result"}
+				rows = [][]interface{}{{"success"}}
+			}
+		} else {
+			columns = []string{"result"}
+			rows = [][]interface{}{{h.formatResult(result)}}
+		}
+	} else {
+		// Múltiples resultados
+		for i := range results {
+			columns = append(columns, fmt.Sprintf("result_%d", i+1))
+		}
+
+		var row []interface{}
+		for _, res := range results {
+			if err, ok := res.(error); ok {
+				if err != nil {
+					row = append(row, err.Error())
+				} else {
+					row = append(row, "success")
+				}
+			} else {
+				row = append(row, h.formatResult(res))
+			}
+		}
+		rows = [][]interface{}{row}
+	}
+
+	return columns, rows
+}
+
+// formatResult formatea un resultado para mostrar
+func (h *Handler) formatResult(result interface{}) interface{} {
+	if result == nil {
+		return "null"
+	}
+
+	switch v := result.(type) {
+	case []int:
+		return fmt.Sprintf("%v", v)
+	case []string:
+		return fmt.Sprintf("%v", v)
+	case Person:
+		if jsonData, err := json.Marshal(v); err == nil {
+			return string(jsonData)
+		}
+		return fmt.Sprintf("%+v", v)
+	default:
+		return result
+	}
+}
+
+// Funciones de ejemplo (copiadas de demo-func.go)
+func returnError() error {
+	return errors.New("algo salió mal")
+}
+
+func returnBool() bool {
+	return true
+}
+
+func returnInt() int {
+	return 42
+}
+
+func returnString() string {
+	return "Hola mundo"
+}
+
+func returnStruct() Person {
+	return Person{Name: "Juan", Age: 30}
+}
+
+func returnIntArray() []int {
+	return []int{1, 2, 3, 4, 5}
+}
+
+func returnStringArray() []string {
+	return []string{"uno", "dos", "tres"}
+}
+
+func returnJSON() string {
+	p := Person{Name: "Ana", Age: 25}
+	data, _ := json.Marshal(p)
+	return string(data)
+}
+
+func lengthOfString(s string) int {
+	return len(s)
+}
+
+func isEven(n int) bool {
+	return n%2 == 0
+}
+
+func greetPerson(p Person) string {
+	return fmt.Sprintf("Hola, %s. Tienes %d años.", p.Name, p.Age)
+}
+
+func sumArray(arr []int) int {
+	sum := 0
+	for _, n := range arr {
+		sum += n
+	}
+	return sum
+}
+
+func validateString(s string) error {
+	if s == "" {
+		return errors.New("cadena vacía")
+	}
+	return nil
+}
+
+func complexFunction(s string, n int) (string, int, error) {
+	if s == "" {
+		return "", 0, errors.New("string vacío")
+	}
+	return s, n * 2, nil
+}
+
+func flagToPerson(flag bool) Person {
+	if flag {
+		return Person{Name: "Verdadero", Age: 1}
+	}
+	return Person{Name: "Falso", Age: 0}
+}
+
+func modifyJSON(jsonStr string) (string, error) {
+	var p Person
+	err := json.Unmarshal([]byte(jsonStr), &p)
+	if err != nil {
+		return "", err
+	}
+	p.Age += 1
+	data, err := json.Marshal(p)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
 }
 
 func (h *Handler) respond(ch *amqp.Channel, replyTo, corrID string, resp RPCResponse) {
