@@ -6,7 +6,7 @@ services:
       - "3306:3306"
     volumes:
       - mariadb_data:/var/lib/mysql
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql  # Monta el script de inicialización
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
       - /etc/localtime:/etc/localtime:ro
     environment:
       - TZ=America/Argentina/Buenos_Aires
@@ -27,7 +27,7 @@ services:
     image: rabbitmq:3-management
     ports:
       - "5672:5672"
-      - "15672:15672"  # Management UI
+      - "15672:15672"
     environment:
       - RABBITMQ_DEFAULT_USER=burrowuser
       - RABBITMQ_DEFAULT_PASS=burrowpass123
@@ -40,6 +40,22 @@ services:
       retries: 10
     networks:
       - burrow_network
+
+  app:
+    container_name: app
+    build:
+      context: ../..
+      dockerfile: server/Dockerfile
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - TZ=America/Argentina/Buenos_Aires
+    networks:
+      - burrow_network
+
 
 volumes:
   mariadb_data:

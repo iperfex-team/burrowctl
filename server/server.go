@@ -131,6 +131,7 @@ type RPCRequest struct {
 	DeviceID string        `json:"deviceID"`
 	Query    string        `json:"query"`
 	Params   []interface{} `json:"params"`
+	ClientIP string        `json:"clientIP"`
 }
 
 type RPCResponse struct {
@@ -146,7 +147,7 @@ func (h *Handler) handleMessage(ch *amqp.Channel, msg amqp.Delivery) {
 		return
 	}
 
-	log.Printf("[server] received type=%s query=%s", req.Type, req.Query)
+	log.Printf("[server] received ip=%s type=%s query=%s", req.ClientIP, req.Type, req.Query)
 
 	switch req.Type {
 	case "sql":

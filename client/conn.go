@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -68,6 +69,16 @@ func (c *Conn) QueryContext(ctx context.Context, query string, args []driver.Nam
 	return rows, err
 }
 
+func getOutboundIP() string {
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+	if err != nil {
+		return "unknown"
+	}
+	defer conn.Close()
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+	return localAddr.IP.String()
+}
+
 func (c *Conn) queryRPC(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	ch, err := c.conn.Channel()
 	if err != nil {
@@ -89,6 +100,7 @@ func (c *Conn) queryRPC(ctx context.Context, query string, args []driver.NamedVa
 		"deviceID": c.deviceID,
 		"query":    query,
 		"params":   argsToSlice(args),
+		"clientIP": getOutboundIP(),
 	}
 
 	body, _ := json.Marshal(req)
