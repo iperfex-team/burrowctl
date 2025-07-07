@@ -1,7 +1,7 @@
 # BurrowCtl Node.js Client
 
 <div align="right">
-  Leia em outros idiomas: 
+  Read in other languages: 
   <a title="Spanish" href="./README.es.md">🇦🇷</a>
   <a title="Português" href="./README.pt.md">🇧🇷</a>
 </div>
