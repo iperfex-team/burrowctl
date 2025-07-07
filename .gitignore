@@ -66,4 +66,18 @@ build/
 # Variables de entorno sensibles
 .env.production
 .env.staging
-secrets/ 
+secrets/
+
+# Go workspace file
+go.work
+
+# Coverage reports
+coverage.out
+coverage.html
+
+# Compiled binaries
+examples/client/client_example
+examples/server/server_example
+
+# Version file (auto-generated)
+version.txt 
