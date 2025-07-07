@@ -46,13 +46,13 @@ func (c *Conn) QueryContext(ctx context.Context, query string, args []driver.Nam
 func (c *Conn) queryRPC(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	ch, err := c.conn.Channel()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create RabbitMQ channel: %v", err)
 	}
 	defer ch.Close()
 
 	replyQueue, err := ch.QueueDeclare("", false, true, true, false, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to declare reply queue: %v", err)
 	}
 
 	corrID := fmt.Sprintf("%d", time.Now().UnixNano())
@@ -73,27 +73,27 @@ func (c *Conn) queryRPC(ctx context.Context, query string, args []driver.NamedVa
 		Body:          body,
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to publish query to device queue '%s': %v\nPlease check:\n- Server is running\n- Device ID '%s' is correct\n- Queue exists", c.deviceID, err, c.deviceID)
 	}
 
 	msgs, err := ch.Consume(replyQueue.Name, "", true, true, false, false, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to consume from reply queue: %v", err)
 	}
 
 	select {
 	case <-ctx.Done():
-		return nil, errors.New("timeout waiting for device response")
+		return nil, fmt.Errorf("timeout (%v) waiting for device response from '%s'\nPlease check:\n- Server is running and responding\n- Device ID '%s' is correct\n- Database is accessible", c.config.Timeout, c.deviceID, c.deviceID)
 	case msg := <-msgs:
 		if msg.CorrelationId != corrID {
-			return nil, errors.New("correlation id mismatch")
+			return nil, fmt.Errorf("correlation id mismatch: expected %s, got %s", corrID, msg.CorrelationId)
 		}
 		var resp RPCResponse
 		if err := json.Unmarshal(msg.Body, &resp); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to parse server response: %v", err)
 		}
 		if resp.Error != "" {
-			return nil, errors.New(resp.Error)
+			return nil, fmt.Errorf("server error: %s", resp.Error)
 		}
 		return &Rows{columns: resp.Columns, rows: resp.Rows}, nil
 	}

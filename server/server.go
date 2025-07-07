@@ -202,24 +202,84 @@ func (h *Handler) handleSQL(ch *amqp.Channel, msg amqp.Delivery, req RPCRequest)
 		return
 	}
 
+	// Obtener tipos de columnas para mejor manejo de datos
+	colTypes, err := rows.ColumnTypes()
+	if err != nil {
+		h.respond(ch, msg.ReplyTo, msg.CorrelationId, RPCResponse{Error: err.Error()})
+		return
+	}
+
 	var data [][]interface{}
 	for rows.Next() {
-		dest := make([]interface{}, len(cols))
-		ptrs := make([]interface{}, len(cols))
-		for i := range dest {
-			ptrs[i] = &dest[i]
+		// Crear scan destinos basados en tipos de columnas
+		scanDest := make([]interface{}, len(cols))
+		for i := range scanDest {
+			scanDest[i] = new(interface{})
 		}
-		if err := rows.Scan(ptrs...); err != nil {
+
+		if err := rows.Scan(scanDest...); err != nil {
 			h.respond(ch, msg.ReplyTo, msg.CorrelationId, RPCResponse{Error: err.Error()})
 			return
 		}
-		data = append(data, dest)
+
+		// Convertir y limpiar tipos de datos
+		row := make([]interface{}, len(cols))
+		for i, val := range scanDest {
+			v := *(val.(*interface{}))
+			row[i] = h.convertDatabaseValue(v, colTypes[i])
+		}
+		data = append(data, row)
 	}
 
 	h.respond(ch, msg.ReplyTo, msg.CorrelationId, RPCResponse{
 		Columns: cols,
 		Rows:    data,
 	})
+}
+
+// Función auxiliar para convertir valores de base de datos a tipos JSON apropiados
+func (h *Handler) convertDatabaseValue(val interface{}, colType *sql.ColumnType) interface{} {
+	if val == nil {
+		return nil
+	}
+
+	switch v := val.(type) {
+	case []byte:
+		// Determinar si debería ser string o número basado en el tipo de columna
+		dbType := colType.DatabaseTypeName()
+		switch dbType {
+		case "TINYINT", "SMALLINT", "MEDIUMINT", "INT", "INTEGER", "BIGINT":
+			// Intentar convertir bytes a número
+			str := string(v)
+			if str == "" {
+				return 0
+			}
+			// Para números, retornar como string para que el cliente lo parsee
+			return str
+		case "DECIMAL", "NUMERIC", "FLOAT", "DOUBLE", "REAL":
+			// Para decimales, retornar como string para que el cliente lo parsee
+			return string(v)
+		case "CHAR", "VARCHAR", "TEXT", "TINYTEXT", "MEDIUMTEXT", "LONGTEXT":
+			// Para texto, retornar como string
+			return string(v)
+		default:
+			// Por defecto, convertir a string
+			return string(v)
+		}
+	case string:
+		return v
+	case int, int8, int16, int32, int64:
+		return v
+	case uint, uint8, uint16, uint32, uint64:
+		return v
+	case float32, float64:
+		return v
+	case bool:
+		return v
+	default:
+		// Para otros tipos, convertir a string
+		return fmt.Sprintf("%v", v)
+	}
 }
 
 func (h *Handler) respond(ch *amqp.Channel, replyTo, corrID string, resp RPCResponse) {
