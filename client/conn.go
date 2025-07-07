@@ -79,6 +79,19 @@ func getOutboundIP() string {
 	return localAddr.IP.String()
 }
 
+// parseCommand detecta el tipo de comando y extrae el comando real
+func parseCommand(query string) (cmdType string, actualQuery string) {
+	// Detectar prefijos especiales para funciones y comandos
+	if len(query) > 9 && query[:9] == "FUNCTION:" {
+		return "function", query[9:]
+	}
+	if len(query) > 8 && query[:8] == "COMMAND:" {
+		return "command", query[8:]
+	}
+	// Por defecto, tratar como SQL
+	return "sql", query
+}
+
 func (c *Conn) queryRPC(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	ch, err := c.conn.Channel()
 	if err != nil {
@@ -95,10 +108,14 @@ func (c *Conn) queryRPC(ctx context.Context, query string, args []driver.NamedVa
 
 	corrID := fmt.Sprintf("%d", time.Now().UnixNano())
 
+	// Detectar el tipo de comando y extraer el comando real
+	cmdType, actualQuery := parseCommand(query)
+	c.logf("Detected command type: %s, actual query: %s", cmdType, actualQuery)
+
 	req := map[string]interface{}{
-		"type":     "sql",
+		"type":     cmdType,
 		"deviceID": c.deviceID,
-		"query":    query,
+		"query":    actualQuery,
 		"params":   argsToSlice(args),
 		"clientIP": getOutboundIP(),
 	}

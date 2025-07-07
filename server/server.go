@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os/exec"
+	"strings"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -160,10 +162,7 @@ func (h *Handler) handleMessage(ch *amqp.Channel, msg amqp.Delivery) {
 		})
 
 	case "command":
-		h.respond(ch, msg.ReplyTo, msg.CorrelationId, RPCResponse{
-			Columns: []string{"message"},
-			Rows:    [][]interface{}{{"command executed (mock)"}},
-		})
+		h.handleCommand(ch, msg, req)
 
 	default:
 		h.respond(ch, msg.ReplyTo, msg.CorrelationId, RPCResponse{
@@ -281,6 +280,74 @@ func (h *Handler) convertDatabaseValue(val interface{}, colType *sql.ColumnType)
 		// Para otros tipos, convertir a string
 		return fmt.Sprintf("%v", v)
 	}
+}
+
+// handleCommand ejecuta un comando del sistema y devuelve su salida
+func (h *Handler) handleCommand(ch *amqp.Channel, msg amqp.Delivery, req RPCRequest) {
+	// Crear contexto con timeout para evitar que comandos se ejecuten indefinidamente
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	log.Printf("[server] executing command: %s", req.Query)
+
+	// Parsear el comando y sus argumentos
+	// El comando viene en req.Query, necesitamos dividirlo en comando y argumentos
+	parts := strings.Fields(req.Query)
+	if len(parts) == 0 {
+		h.respond(ch, msg.ReplyTo, msg.CorrelationId, RPCResponse{
+			Error: "empty command",
+		})
+		return
+	}
+
+	command := parts[0]
+	args := parts[1:]
+
+	// Crear y ejecutar el comando
+	cmd := exec.CommandContext(ctx, command, args...)
+
+	// Capturar tanto stdout como stderr
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+		// Si hay error, incluir tanto el error como la salida (si la hay)
+		errorMsg := fmt.Sprintf("command failed: %v", err)
+		if len(output) > 0 {
+			errorMsg += fmt.Sprintf("\nOutput: %s", string(output))
+		}
+		h.respond(ch, msg.ReplyTo, msg.CorrelationId, RPCResponse{
+			Error: errorMsg,
+		})
+		return
+	}
+
+	// Convertir la salida a string y dividir en líneas
+	outputStr := string(output)
+
+	// Dividir la salida en líneas
+	lines := strings.Split(outputStr, "\n")
+
+	// Preparar las filas para la respuesta
+	var rows [][]interface{}
+
+	// Agregar cada línea como una fila
+	for _, line := range lines {
+		// Incluir líneas vacías también, ya que pueden ser parte de la salida
+		rows = append(rows, []interface{}{line})
+	}
+
+	// Si no hay salida, agregar una fila indicando que el comando se ejecutó correctamente
+	if len(rows) == 0 {
+		rows = append(rows, []interface{}{"(command executed successfully - no output)"})
+	}
+
+	// Responder con la salida del comando
+	h.respond(ch, msg.ReplyTo, msg.CorrelationId, RPCResponse{
+		Columns: []string{"output"},
+		Rows:    rows,
+	})
+
+	log.Printf("[server] command executed successfully, returned %d lines", len(rows))
 }
 
 func (h *Handler) respond(ch *amqp.Channel, replyTo, corrID string, resp RPCResponse) {
