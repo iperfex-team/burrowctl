@@ -3,7 +3,7 @@
 # -------------------------
 # Etapa de construcción
 # -------------------------
-FROM golang:1.22 AS builder
+FROM golang:1.22-bookworm AS builder
 
 WORKDIR /app
 
@@ -20,12 +20,13 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o burrowctl-server ./example
 # -------------------------
 # Imagen final mínima
 # -------------------------
-FROM scratch
+FROM debian:bookworm-slim 
+
+RUN apt-get update && apt-get install -y procps net-tools curl vim tzdata && rm -rf /var/lib/apt/lists/*
 
 # Copiar binario desde la etapa anterior
 COPY --from=builder /app/burrowctl-server /burrowctl-server
 
-# Configurar zona horaria por defecto (opcional, comenta si no es necesario)
-# ENV TZ=America/Argentina/Buenos_Aires
+ENV TZ=America/Argentina/Buenos_Aires
 
 ENTRYPOINT ["/burrowctl-server"]
