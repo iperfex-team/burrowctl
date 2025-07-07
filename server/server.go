@@ -93,6 +93,22 @@ func (h *Handler) Start(ctx context.Context) error {
 	}
 	defer ch.Close()
 
+	// Declarar la cola antes de consumir de ella
+	// Esto asegura que la cola existe antes de intentar consumir
+	_, err = ch.QueueDeclare(
+		h.deviceID, // name - nombre de la cola (usamos el deviceID)
+		false,      // durable - no persistente (se pierde si se reinicia RabbitMQ)
+		false,      // delete when unused - no borrar automáticamente
+		false,      // exclusive - no exclusiva
+		false,      // no-wait - esperar confirmación
+		nil,        // arguments - sin argumentos adicionales
+	)
+	if err != nil {
+		return fmt.Errorf("failed to declare queue: %w", err)
+	}
+
+	log.Printf("[server] Queue '%s' declared successfully", h.deviceID)
+
 	msgs, err := ch.Consume(h.deviceID, "", true, true, false, false, nil)
 	if err != nil {
 		return err
