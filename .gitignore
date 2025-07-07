@@ -1,0 +1,69 @@
+# Binarios compilados de Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+burrowctl
+burrowctl.exe
+
+# Archivos de test
+*.test
+
+# Archivos de coverage
+*.out
+*.prof
+
+# Directorios de dependencias de Go
+vendor/
+
+# Archivos temporales del IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Archivos de configuración local
+.env
+.env.local
+config.local.*
+
+# Logs
+*.log
+logs/
+
+# Archivos del sistema operativo
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Desktop.ini
+Thumbs.db
+
+# Archivos temporales
+*.tmp
+*.temp
+temp/
+tmp/
+
+# Archivos de backup
+*.bak
+*.backup
+
+# Archivos de distribución
+dist/
+build/
+
+# Certificados y claves privadas
+*.pem
+*.key
+*.crt
+*.cert
+
+# Variables de entorno sensibles
+.env.production
+.env.staging
+secrets/ 
