@@ -30,8 +30,8 @@ func main() {
 
 	h := server.NewHandler(
 		"fd1825ec5a7b63f3fa2be9e04154d3b16f676663ba38e23d4ffafa7b0df29efb",
-		"amqp://guest:guest@localhost:5672/",
-		"user:pass@tcp(localhost:3306)/dbname?parseTime=true",
+		"amqp://burrowuser:burrowpass123@localhost:5672/",
+		"burrowuser:burrowpass123@tcp(localhost:3306)/burrowdb?parseTime=true",
 		"open", // "" defaults to open
 		pool,
 	)
