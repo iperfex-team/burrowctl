@@ -121,12 +121,13 @@ clean: clean-examples ## Limpia archivos generados
 .PHONY: check-git-clean
 check-git-clean: ## Verifica que el git esté limpio
 	@echo "$(GREEN)🔍 Verificando estado de git...$(NC)"
-	@if [ -n "$$(git status --porcelain)" ]; then \
+	@UNCOMMITTED=$$(git status --porcelain | grep -v "^ M version.txt$$" | grep -v "^M  version.txt$$"); \
+	if [ -n "$$UNCOMMITTED" ]; then \
 		echo "$(RED)❌ Error: Hay cambios sin commit$(NC)"; \
-		git status --short; \
+		git status --short | grep -v "version.txt"; \
 		exit 1; \
 	fi
-	@echo "$(GREEN)✅ Git está limpio$(NC)"
+	@echo "$(GREEN)✅ Git está limpio (ignorando version.txt)$(NC)"
 
 .PHONY: check-main-branch
 check-main-branch: ## Verifica que estés en la rama main
