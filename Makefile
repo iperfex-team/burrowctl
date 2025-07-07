@@ -1,6 +1,6 @@
 # Makefile para burrowctl
 # Versión por defecto
-VERSION ?= v1.2.1
+VERSION ?= v1.2.2
 
 # Configuración del proyecto
 PROJECT_NAME = burrowctl
