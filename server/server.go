@@ -406,6 +406,13 @@ func (h *Handler) handleFunction(ch *amqp.Channel, msg amqp.Delivery, req RPCReq
 
 // executeFunction ejecuta una función por nombre usando reflection
 func (h *Handler) executeFunction(ctx context.Context, funcReq FunctionRequest) ([]interface{}, error) {
+	// Verificar si el contexto fue cancelado
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
 	// Obtener la función por nombre
 	funcValue := h.getFunctionByName(funcReq.Name)
 	if !funcValue.IsValid() {
