@@ -1,2 +1,0 @@
-initial_version: 1.4.3
-git_hash: 156a45a
