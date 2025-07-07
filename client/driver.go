@@ -4,7 +4,9 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"fmt"
+	"log"
 	"net/url"
+	"strings"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -28,6 +30,10 @@ func (d *Driver) Open(dsn string) (driver.Conn, error) {
 		return nil, fmt.Errorf("RabbitMQ connection failed to '%s': %v\nPlease check:\n- RabbitMQ server is running\n- Credentials are correct\n- Network connectivity", conf.AMQPURL, err)
 	}
 
+	if conf.Debug {
+		log.Printf("[client debug] Connected to RabbitMQ %s (deviceID=%s, timeout=%v)", conf.AMQPURL, conf.DeviceID, conf.Timeout)
+	}
+
 	return &Conn{
 		deviceID: conf.DeviceID,
 		conn:     conn,
@@ -39,6 +45,7 @@ type DSNConfig struct {
 	DeviceID string
 	AMQPURL  string
 	Timeout  time.Duration
+	Debug    bool
 }
 
 func parseDSN(dsn string) (*DSNConfig, error) {
@@ -77,10 +84,15 @@ func parseDSN(dsn string) (*DSNConfig, error) {
 		timeout = parsedTimeout
 	}
 
+	// Parsear debug (opcional)
+	debugStr := strings.ToLower(values.Get("debug"))
+	debug := debugStr == "true" || debugStr == "1"
+
 	conf := &DSNConfig{
 		DeviceID: deviceID,
 		AMQPURL:  amqpURI,
 		Timeout:  timeout,
+		Debug:    debug,
 	}
 
 	return conf, nil

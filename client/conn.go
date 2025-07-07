@@ -4,8 +4,8 @@ import (
 	"context"
 	"database/sql/driver"
 	"encoding/json"
-	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -17,30 +17,55 @@ type Conn struct {
 	config   *DSNConfig
 }
 
+func (c *Conn) logf(format string, args ...interface{}) {
+	if c.config != nil && c.config.Debug {
+		log.Printf("[client debug] "+format, args...)
+	}
+}
+
 func (c *Conn) Prepare(query string) (driver.Stmt, error) {
-	return nil, errors.New("Prepare not implemented")
+	return nil, fmt.Errorf("Prepare not implemented")
 }
 
 func (c *Conn) Close() error {
+	c.logf("Closing connection to RabbitMQ")
 	return c.conn.Close()
 }
 
 func (c *Conn) Begin() (driver.Tx, error) {
-	return nil, errors.New("transactions not supported")
+	return nil, fmt.Errorf("transactions not supported")
 }
 
 func (c *Conn) Query(query string, args []driver.Value) (driver.Rows, error) {
+	startTotal := time.Now()
+	c.logf("Executing query: %s", query)
+
 	ctx, cancel := context.WithTimeout(context.Background(), c.config.Timeout)
 	defer cancel()
+
 	named := make([]driver.NamedValue, len(args))
 	for i, v := range args {
 		named[i] = driver.NamedValue{Ordinal: i + 1, Value: v}
 	}
-	return c.queryRPC(ctx, query, named)
+
+	rows, err := c.queryRPC(ctx, query, named)
+
+	total := time.Since(startTotal)
+	c.logf("total time: %v", total)
+
+	return rows, err
 }
 
 func (c *Conn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
-	return c.queryRPC(ctx, query, args)
+	startTotal := time.Now()
+	c.logf("Executing query (Context): %s", query)
+
+	rows, err := c.queryRPC(ctx, query, args)
+
+	total := time.Since(startTotal)
+	c.logf("total time (QueryContext): %v", total)
+
+	return rows, err
 }
 
 func (c *Conn) queryRPC(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
@@ -49,11 +74,13 @@ func (c *Conn) queryRPC(ctx context.Context, query string, args []driver.NamedVa
 		return nil, fmt.Errorf("failed to create RabbitMQ channel: %v", err)
 	}
 	defer ch.Close()
+	c.logf("RabbitMQ channel opened")
 
 	replyQueue, err := ch.QueueDeclare("", false, true, true, false, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to declare reply queue: %v", err)
 	}
+	c.logf("Reply queue declared: %s", replyQueue.Name)
 
 	corrID := fmt.Sprintf("%d", time.Now().UnixNano())
 
@@ -66,6 +93,9 @@ func (c *Conn) queryRPC(ctx context.Context, query string, args []driver.NamedVa
 
 	body, _ := json.Marshal(req)
 
+	startRT := time.Now()
+	c.logf("Publishing query to device queue '%s'", c.deviceID)
+
 	err = ch.PublishWithContext(ctx, "", c.deviceID, false, false, amqp.Publishing{
 		ContentType:   "application/json",
 		CorrelationId: corrID,
@@ -75,6 +105,7 @@ func (c *Conn) queryRPC(ctx context.Context, query string, args []driver.NamedVa
 	if err != nil {
 		return nil, fmt.Errorf("failed to publish query to device queue '%s': %v\nPlease check:\n- Server is running\n- Device ID '%s' is correct\n- Queue exists", c.deviceID, err, c.deviceID)
 	}
+	c.logf("Query published, waiting for response...")
 
 	msgs, err := ch.Consume(replyQueue.Name, "", true, true, false, false, nil)
 	if err != nil {
@@ -85,6 +116,9 @@ func (c *Conn) queryRPC(ctx context.Context, query string, args []driver.NamedVa
 	case <-ctx.Done():
 		return nil, fmt.Errorf("timeout (%v) waiting for device response from '%s'\nPlease check:\n- Server is running and responding\n- Device ID '%s' is correct\n- Database is accessible", c.config.Timeout, c.deviceID, c.deviceID)
 	case msg := <-msgs:
+		rt := time.Since(startRT)
+		c.logf("RabbitMQ roundtrip time: %v", rt)
+
 		if msg.CorrelationId != corrID {
 			return nil, fmt.Errorf("correlation id mismatch: expected %s, got %s", corrID, msg.CorrelationId)
 		}
@@ -95,6 +129,7 @@ func (c *Conn) queryRPC(ctx context.Context, query string, args []driver.NamedVa
 		if resp.Error != "" {
 			return nil, fmt.Errorf("server error: %s", resp.Error)
 		}
+		c.logf("Response received with %d rows", len(resp.Rows))
 		return &Rows{columns: resp.Columns, rows: resp.Rows}, nil
 	}
 }

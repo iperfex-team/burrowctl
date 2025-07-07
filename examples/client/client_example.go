@@ -10,7 +10,7 @@ import (
 
 func main() {
 	// DSN con credenciales hardcodeadas para RabbitMQ
-	dsn := "deviceID=fd1825ec5a7b63f3fa2be9e04154d3b16f676663ba38e23d4ffafa7b0df29efb&amqp_uri=amqp://burrowuser:burrowpass123@localhost:5672/&timeout=5s"
+	dsn := "deviceID=fd1825ec5a7b63f3fa2be9e04154d3b16f676663ba38e23d4ffafa7b0df29efb&amqp_uri=amqp://burrowuser:burrowpass123@localhost:5672/&timeout=5s&debug=true"
 
 	// Abrir conexión usando el driver rabbitsql
 	db, err := sql.Open("rabbitsql", dsn)
