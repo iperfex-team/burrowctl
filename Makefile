@@ -1,6 +1,53 @@
 # Makefile para burrowctl
 # Versión por defecto
-VERSION ?= v1.3.0
+# ---------------- Gestión automática de versión ----------------
+# Obtiene el hash corto de git; si falla (por ejemplo, sin repo), muestra 'development'
+git_hash := $(shell git rev-parse --short HEAD 2>/dev/null || echo 'development')
+
+# Archivo donde se persiste la versión
+version_file := version.txt
+
+# Versión inicial por defecto si el archivo no existe
+initial_version := 1.0.0
+
+# Crear version.txt si no existe
+ifeq ($(wildcard $(version_file)),)
+$(shell echo "initial_version: $(initial_version)" > $(version_file))
+$(shell echo "git_hash: $(git_hash)" >> $(version_file))
+endif
+
+# Leer última versión y hash almacenados
+last_version := $(shell awk -F': ' '/initial_version:/ {print $$2}' $(version_file) | xargs)
+last_git_hash := $(shell awk -F': ' '/git_hash:/ {print $$2}' $(version_file) | xargs)
+
+# Calcular la versión a usar
+ifeq ($(strip $(git_hash)), $(strip $(last_git_hash)))
+VERSION := $(last_version)
+else
+# Incrementar el número de versión (patch → minor → major)
+VERSION := $(shell \
+  major=$$(echo $(last_version) | awk -F. '{print $$1}'); \
+  minor=$$(echo $(last_version) | awk -F. '{print $$2}'); \
+  patch=$$(echo $(last_version) | awk -F. '{print $$3}'); \
+  if [ $$patch -eq 9 ]; then \
+    if [ $$minor -eq 9 ]; then \
+      echo "$$((major + 1)).0.0"; \
+    else \
+      echo "$$major.$$((minor + 1)).0"; \
+    fi; \
+  else \
+    echo "$$major.$$minor.$$((patch + 1))"; \
+  fi)
+# Actualizar version.txt con la nueva versión y hash
+$(shell echo "initial_version: $(VERSION)" > $(version_file))
+$(shell echo "git_hash: $(git_hash)" >> $(version_file))
+endif
+
+# Mensajes informativos
+$(info git_hash: $(git_hash))
+$(info last_version: $(last_version))
+$(info last_git_hash: $(last_git_hash))
+$(info next VERSION: $(VERSION))
 
 # Configuración del proyecto
 PROJECT_NAME = burrowctl
