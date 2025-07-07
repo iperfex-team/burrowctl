@@ -1,2 +1,2 @@
-initial_version: 1.5.1
-git_hash: ef1532b
+initial_version: 1.5.2
+git_hash: 37e4cb4

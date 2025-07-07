@@ -81,3 +81,6 @@ examples/server/server_example
 
 # Version file (auto-generated)
 version.txt 
+
+# Node.js dependencies and compiled files
+client-nodejs/node_modules/
