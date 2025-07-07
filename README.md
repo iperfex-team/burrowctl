@@ -264,3 +264,4 @@ Currently returns a mock response:
 ## 📋 License
 
 MIT License.
+# Version bump to 1.5.x series
