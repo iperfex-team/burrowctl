@@ -1,2 +1,2 @@
-initial_version: 1.5.3
-git_hash: 3857d18
+initial_version: 1.5.4
+git_hash: 6121c31
