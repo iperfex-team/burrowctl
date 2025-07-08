@@ -134,9 +134,9 @@ func modifyJSON(jsonStr string) (string, error) {
 // REGISTRO DE FUNCIONES DISPONIBLES
 // ============================================================================
 
-// getFunctionRegistry retorna un mapa con todas las funciones disponibles
+// getExampleFunctions retorna un mapa con todas las funciones de ejemplo
 // Esto evita los warnings de "unused" y sirve como documentación
-func getFunctionRegistry() map[string]interface{} {
+func getExampleFunctions() map[string]interface{} {
 	return map[string]interface{}{
 		// Funciones sin parámetros
 		"returnError":       returnError,
@@ -162,12 +162,41 @@ func getFunctionRegistry() map[string]interface{} {
 	}
 }
 
-// validateFunctionRegistry verifica que todas las funciones estén disponibles
-func validateFunctionRegistry() {
-	registry := getFunctionRegistry()
-	log.Printf("📋 Function registry initialized with %d functions:", len(registry))
+// registerExampleFunctions registra todas las funciones de ejemplo
+func registerExampleFunctions(h *server.Handler) {
+	functions := map[string]interface{}{
+		// Funciones sin parámetros
+		"returnError":       returnError,
+		"returnBool":        returnBool,
+		"returnInt":         returnInt,
+		"returnString":      returnString,
+		"returnStruct":      returnStruct,
+		"returnIntArray":    returnIntArray,
+		"returnStringArray": returnStringArray,
+		"returnJSON":        returnJSON,
 
-	for name := range registry {
+		// Funciones con parámetros
+		"lengthOfString": lengthOfString,
+		"isEven":         isEven,
+		"greetPerson":    greetPerson,
+		"sumArray":       sumArray,
+		"validateString": validateString,
+		"flagToPerson":   flagToPerson,
+		"modifyJSON":     modifyJSON,
+
+		// Funciones con múltiples valores de retorno
+		"complexFunction": complexFunction,
+	}
+
+	h.RegisterFunctions(functions)
+}
+
+// validateFunctionRegistry verifica que todas las funciones estén disponibles
+func validateFunctionRegistry(h *server.Handler) {
+	registeredFunctions := h.GetRegisteredFunctions()
+	log.Printf("📋 Function registry initialized with %d functions:", len(registeredFunctions))
+
+	for _, name := range registeredFunctions {
 		log.Printf("   • %s", name)
 	}
 
@@ -176,7 +205,7 @@ func validateFunctionRegistry() {
 
 // getAvailableFunctions devuelve una lista de nombres de funciones disponibles
 func getAvailableFunctions() []string {
-	registry := getFunctionRegistry()
+	registry := getExampleFunctions()
 	var functions []string
 
 	for name := range registry {
@@ -480,9 +509,6 @@ func runServer() {
 	mysqlDSN := getEnv("BURROWCTL_MYSQL_DSN", "burrowuser:burrowpass123@tcp(mariadb:3306)/burrowdb?parseTime=true")
 	connectionMode := getEnv("BURROWCTL_CONNECTION_MODE", "open")
 
-	// Validate function registry
-	validateFunctionRegistry()
-
 	// Create the handler with configuration
 	h := server.NewHandler(
 		deviceID,       // Device ID
@@ -491,6 +517,12 @@ func runServer() {
 		connectionMode, // Connection mode: "open" for connection pool, "close" for per-query connections
 		pool,           // Configuration of the pool
 	)
+
+	// Register example functions
+	registerExampleFunctions(h)
+
+	// Validate function registry
+	validateFunctionRegistry(h)
 
 	log.Println("🚀 Starting burrowctl server...")
 	log.Printf("📱 Device ID: %s", deviceID)

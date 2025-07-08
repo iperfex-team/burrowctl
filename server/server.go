@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"os/exec"
@@ -31,6 +30,8 @@ type Handler struct {
 	db       *sql.DB
 	mode     string
 	poolConf PoolConfig
+	// Registry de funciones personalizables
+	functionRegistry map[string]interface{}
 }
 
 // Estructuras para manejo de funciones
@@ -75,12 +76,42 @@ func NewHandler(deviceID, amqpURL, mysqlDSN, mode string, poolConf *PoolConfig) 
 	}
 
 	return &Handler{
-		deviceID: deviceID,
-		amqpURL:  amqpURL,
-		mysqlDSN: mysqlDSN,
-		mode:     mode,
-		poolConf: *poolConf,
+		deviceID:         deviceID,
+		amqpURL:          amqpURL,
+		mysqlDSN:         mysqlDSN,
+		mode:             mode,
+		poolConf:         *poolConf,
+		functionRegistry: make(map[string]interface{}), // Registry vacío por defecto
 	}
+}
+
+// RegisterFunction permite registrar funciones desde ejemplos
+func (h *Handler) RegisterFunction(name string, function interface{}) {
+	if h.functionRegistry == nil {
+		h.functionRegistry = make(map[string]interface{})
+	}
+	h.functionRegistry[name] = function
+	log.Printf("[server] Function '%s' registered", name)
+}
+
+// RegisterFunctions permite registrar múltiples funciones de una vez
+func (h *Handler) RegisterFunctions(functions map[string]interface{}) {
+	if h.functionRegistry == nil {
+		h.functionRegistry = make(map[string]interface{})
+	}
+	for name, function := range functions {
+		h.functionRegistry[name] = function
+	}
+	log.Printf("[server] %d functions registered", len(functions))
+}
+
+// GetRegisteredFunctions devuelve la lista de funciones registradas
+func (h *Handler) GetRegisteredFunctions() []string {
+	var names []string
+	for name := range h.functionRegistry {
+		names = append(names, name)
+	}
+	return names
 }
 
 func (h *Handler) Start(ctx context.Context) error {
@@ -437,29 +468,13 @@ func (h *Handler) executeFunction(ctx context.Context, funcReq FunctionRequest) 
 	return output, nil
 }
 
-// getFunctionByName devuelve la función por nombre
+// getFunctionByName devuelve la función por nombre desde el registry
 func (h *Handler) getFunctionByName(name string) reflect.Value {
-	// Mapa de funciones disponibles
-	functions := map[string]interface{}{
-		"returnError":       returnError,
-		"returnBool":        returnBool,
-		"returnInt":         returnInt,
-		"returnString":      returnString,
-		"returnStruct":      returnStruct,
-		"returnIntArray":    returnIntArray,
-		"returnStringArray": returnStringArray,
-		"returnJSON":        returnJSON,
-		"lengthOfString":    lengthOfString,
-		"isEven":            isEven,
-		"greetPerson":       greetPerson,
-		"sumArray":          sumArray,
-		"validateString":    validateString,
-		"complexFunction":   complexFunction,
-		"flagToPerson":      flagToPerson,
-		"modifyJSON":        modifyJSON,
+	if h.functionRegistry == nil {
+		return reflect.Value{}
 	}
 
-	if fn, exists := functions[name]; exists {
+	if fn, exists := h.functionRegistry[name]; exists {
 		return reflect.ValueOf(fn)
 	}
 
@@ -616,96 +631,6 @@ func (h *Handler) formatResult(result interface{}) interface{} {
 	default:
 		return result
 	}
-}
-
-// Funciones de ejemplo (copiadas de demo-func.go)
-func returnError() error {
-	return errors.New("algo salió mal")
-}
-
-func returnBool() bool {
-	return true
-}
-
-func returnInt() int {
-	return 42
-}
-
-func returnString() string {
-	return "Hola mundo"
-}
-
-func returnStruct() Person {
-	return Person{Name: "Juan", Age: 30}
-}
-
-func returnIntArray() []int {
-	return []int{1, 2, 3, 4, 5}
-}
-
-func returnStringArray() []string {
-	return []string{"uno", "dos", "tres"}
-}
-
-func returnJSON() string {
-	p := Person{Name: "Ana", Age: 25}
-	data, _ := json.Marshal(p)
-	return string(data)
-}
-
-func lengthOfString(s string) int {
-	return len(s)
-}
-
-func isEven(n int) bool {
-	return n%2 == 0
-}
-
-func greetPerson(p Person) string {
-	return fmt.Sprintf("Hola, %s. Tienes %d años.", p.Name, p.Age)
-}
-
-func sumArray(arr []int) int {
-	sum := 0
-	for _, n := range arr {
-		sum += n
-	}
-	return sum
-}
-
-func validateString(s string) error {
-	if s == "" {
-		return errors.New("cadena vacía")
-	}
-	return nil
-}
-
-func complexFunction(s string, n int) (string, int, error) {
-	if s == "" {
-		return "", 0, errors.New("string vacío")
-	}
-	return s, n * 2, nil
-}
-
-func flagToPerson(flag bool) Person {
-	if flag {
-		return Person{Name: "Verdadero", Age: 1}
-	}
-	return Person{Name: "Falso", Age: 0}
-}
-
-func modifyJSON(jsonStr string) (string, error) {
-	var p Person
-	err := json.Unmarshal([]byte(jsonStr), &p)
-	if err != nil {
-		return "", err
-	}
-	p.Age += 1
-	data, err := json.Marshal(p)
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
 }
 
 func (h *Handler) respond(ch *amqp.Channel, replyTo, corrID string, resp RPCResponse) {

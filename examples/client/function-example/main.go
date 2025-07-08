@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 
 	_ "github.com/lordbasex/burrowctl/client"
 )
@@ -34,10 +35,17 @@ func main() {
 
 	fmt.Printf("📡 Connecting to device: %s\n", "fd1825ec5a7b63f3fa2be9e04154d3b16f676663ba38e23d4ffafa7b0df29efb")
 
-	// Verificar argumentos de línea de comandos para función específica
+	// Verificar argumentos de línea de comandos
 	if len(os.Args) > 1 {
 		functionName := os.Args[1]
-		executeSingleFunction(db, functionName)
+		args := os.Args[2:] // Resto de argumentos son parámetros
+
+		if functionName == "help" || functionName == "--help" || functionName == "-h" {
+			showUsage()
+			return
+		}
+
+		executeFunctionWithArgs(db, functionName, args)
 		return
 	}
 
@@ -95,41 +103,214 @@ func main() {
 	})
 
 	fmt.Println("\n✅ All function examples executed successfully")
-	fmt.Println("\n💡 Tips:")
-	fmt.Println("   - You can specify a function name as argument:")
-	fmt.Println("     go run main.go returnString")
-	fmt.Println("   - Available functions: returnBool, returnInt, returnString, returnStruct")
-	fmt.Println("     lengthOfString, isEven, sumArray, greetPerson, validateString, complexFunction")
-	fmt.Println("   - The client sends JSON with function name and typed parameters")
+	showUsage()
 }
 
-func executeSingleFunction(db *sql.DB, functionName string) {
-	fmt.Printf("\n🔧 Executing single function: %s\n", functionName)
+func showUsage() {
+	fmt.Println("\n💡 Uso del cliente:")
+	fmt.Println("================")
+	fmt.Println()
+	fmt.Println("🔹 Funciones sin parámetros:")
+	fmt.Println("   go run main.go returnString")
+	fmt.Println("   go run main.go returnInt")
+	fmt.Println("   go run main.go returnBool")
+	fmt.Println("   go run main.go returnStruct")
+	fmt.Println("   go run main.go returnError")
+	fmt.Println()
+	fmt.Println("🔹 Funciones con parámetros:")
+	fmt.Println("   go run main.go lengthOfString \"Hello World\"")
+	fmt.Println("   go run main.go isEven 42")
+	fmt.Println("   go run main.go sumArray \"[1,2,3,4,5]\"")
+	fmt.Println("   go run main.go greetPerson \"Juan\" 30")
+	fmt.Println("   go run main.go validateString \"test\"")
+	fmt.Println("   go run main.go modifyJSON '{\"name\":\"Juan\",\"age\":30}'")
+	fmt.Println()
+	fmt.Println("🔹 Funciones con múltiples valores de retorno:")
+	fmt.Println("   go run main.go complexFunction \"Go\" 10")
+	fmt.Println()
+	fmt.Println("🔹 Ejemplos especiales:")
+	fmt.Println("   go run main.go flagToPerson true")
+	fmt.Println("   go run main.go validateString \"\"  # Prueba string vacío")
+	fmt.Println()
+	fmt.Println("📋 Funciones disponibles:")
+	fmt.Println("   Sin parámetros: returnError, returnBool, returnInt, returnString,")
+	fmt.Println("                   returnStruct, returnIntArray, returnStringArray, returnJSON")
+	fmt.Println("   Con parámetros: lengthOfString, isEven, sumArray, greetPerson,")
+	fmt.Println("                   validateString, flagToPerson, modifyJSON, complexFunction")
+}
 
-	// Ejemplos de parámetros según la función
-	var params []FunctionParam
-	switch functionName {
-	case "lengthOfString":
-		params = []FunctionParam{{Type: "string", Value: "Hello World"}}
-	case "isEven":
-		params = []FunctionParam{{Type: "int", Value: 42}}
-	case "sumArray":
-		params = []FunctionParam{{Type: "[]int", Value: []interface{}{1, 2, 3, 4, 5}}}
-	case "greetPerson":
-		params = []FunctionParam{{Type: "Person", Value: map[string]interface{}{
-			"name": "Juan",
-			"age":  30,
-		}}}
-	case "validateString":
-		params = []FunctionParam{{Type: "string", Value: "test string"}}
-	case "complexFunction":
-		params = []FunctionParam{
-			{Type: "string", Value: "Go"},
-			{Type: "int", Value: 5},
-		}
+func executeFunctionWithArgs(db *sql.DB, functionName string, args []string) {
+	fmt.Printf("\n🔧 Executing function: %s", functionName)
+	if len(args) > 0 {
+		fmt.Printf(" with args: %v", args)
+	}
+	fmt.Println()
+
+	// Construir parámetros según la función y los argumentos
+	params, err := buildFunctionParams(functionName, args)
+	if err != nil {
+		log.Printf("❌ Error building parameters: %v", err)
+		showFunctionHelp(functionName)
+		return
 	}
 
 	executeFunction(db, functionName, params)
+}
+
+func buildFunctionParams(functionName string, args []string) ([]FunctionParam, error) {
+	switch functionName {
+	// Funciones sin parámetros
+	case "returnError", "returnBool", "returnInt", "returnString",
+		"returnStruct", "returnIntArray", "returnStringArray", "returnJSON":
+		if len(args) > 0 {
+			return nil, fmt.Errorf("function '%s' no acepta parámetros", functionName)
+		}
+		return []FunctionParam{}, nil
+
+	// lengthOfString(string) int
+	case "lengthOfString":
+		if len(args) != 1 {
+			return nil, fmt.Errorf("lengthOfString requiere 1 parámetro: string")
+		}
+		return []FunctionParam{
+			{Type: "string", Value: args[0]},
+		}, nil
+
+	// isEven(int) bool
+	case "isEven":
+		if len(args) != 1 {
+			return nil, fmt.Errorf("isEven requiere 1 parámetro: int")
+		}
+		num, err := strconv.Atoi(args[0])
+		if err != nil {
+			return nil, fmt.Errorf("isEven requiere un número entero, recibido: %s", args[0])
+		}
+		return []FunctionParam{
+			{Type: "int", Value: num},
+		}, nil
+
+	// sumArray([]int) int
+	case "sumArray":
+		if len(args) != 1 {
+			return nil, fmt.Errorf("sumArray requiere 1 parámetro: array de enteros como '[1,2,3]'")
+		}
+		// Parsear array JSON
+		var nums []int
+		if err := json.Unmarshal([]byte(args[0]), &nums); err != nil {
+			return nil, fmt.Errorf("sumArray requiere array JSON válido, ej: '[1,2,3,4,5]'")
+		}
+		// Convertir a []interface{}
+		intArray := make([]interface{}, len(nums))
+		for i, v := range nums {
+			intArray[i] = v
+		}
+		return []FunctionParam{
+			{Type: "[]int", Value: intArray},
+		}, nil
+
+	// greetPerson(Person) string
+	case "greetPerson":
+		if len(args) != 2 {
+			return nil, fmt.Errorf("greetPerson requiere 2 parámetros: nombre edad")
+		}
+		age, err := strconv.Atoi(args[1])
+		if err != nil {
+			return nil, fmt.Errorf("greetPerson: edad debe ser un número entero")
+		}
+		return []FunctionParam{
+			{Type: "Person", Value: map[string]interface{}{
+				"name": args[0],
+				"age":  age,
+			}},
+		}, nil
+
+	// validateString(string) error
+	case "validateString":
+		if len(args) != 1 {
+			return nil, fmt.Errorf("validateString requiere 1 parámetro: string")
+		}
+		return []FunctionParam{
+			{Type: "string", Value: args[0]},
+		}, nil
+
+	// flagToPerson(bool) Person
+	case "flagToPerson":
+		if len(args) != 1 {
+			return nil, fmt.Errorf("flagToPerson requiere 1 parámetro: bool (true/false)")
+		}
+		flag, err := strconv.ParseBool(args[0])
+		if err != nil {
+			return nil, fmt.Errorf("flagToPerson requiere bool válido (true/false)")
+		}
+		return []FunctionParam{
+			{Type: "bool", Value: flag},
+		}, nil
+
+	// modifyJSON(string) (string, error)
+	case "modifyJSON":
+		if len(args) != 1 {
+			return nil, fmt.Errorf("modifyJSON requiere 1 parámetro: JSON string")
+		}
+		// Validar que sea JSON válido
+		var temp interface{}
+		if err := json.Unmarshal([]byte(args[0]), &temp); err != nil {
+			return nil, fmt.Errorf("modifyJSON requiere JSON válido")
+		}
+		return []FunctionParam{
+			{Type: "string", Value: args[0]},
+		}, nil
+
+	// complexFunction(string, int) (string, int, error)
+	case "complexFunction":
+		if len(args) != 2 {
+			return nil, fmt.Errorf("complexFunction requiere 2 parámetros: string int")
+		}
+		num, err := strconv.Atoi(args[1])
+		if err != nil {
+			return nil, fmt.Errorf("complexFunction: segundo parámetro debe ser entero")
+		}
+		return []FunctionParam{
+			{Type: "string", Value: args[0]},
+			{Type: "int", Value: num},
+		}, nil
+
+	default:
+		return nil, fmt.Errorf("función desconocida: %s", functionName)
+	}
+}
+
+func showFunctionHelp(functionName string) {
+	fmt.Printf("\n💡 Ayuda para función '%s':\n", functionName)
+
+	switch functionName {
+	case "lengthOfString":
+		fmt.Println("   Uso: go run main.go lengthOfString \"texto\"")
+		fmt.Println("   Ejemplo: go run main.go lengthOfString \"Hello World\"")
+	case "isEven":
+		fmt.Println("   Uso: go run main.go isEven número")
+		fmt.Println("   Ejemplo: go run main.go isEven 42")
+	case "sumArray":
+		fmt.Println("   Uso: go run main.go sumArray \"[num1,num2,num3]\"")
+		fmt.Println("   Ejemplo: go run main.go sumArray \"[1,2,3,4,5]\"")
+	case "greetPerson":
+		fmt.Println("   Uso: go run main.go greetPerson \"nombre\" edad")
+		fmt.Println("   Ejemplo: go run main.go greetPerson \"Juan\" 30")
+	case "validateString":
+		fmt.Println("   Uso: go run main.go validateString \"texto\"")
+		fmt.Println("   Ejemplo: go run main.go validateString \"test\"")
+	case "flagToPerson":
+		fmt.Println("   Uso: go run main.go flagToPerson true/false")
+		fmt.Println("   Ejemplo: go run main.go flagToPerson true")
+	case "modifyJSON":
+		fmt.Println("   Uso: go run main.go modifyJSON '{\"name\":\"Juan\",\"age\":30}'")
+		fmt.Println("   Ejemplo: go run main.go modifyJSON '{\"name\":\"María\",\"age\":25}'")
+	case "complexFunction":
+		fmt.Println("   Uso: go run main.go complexFunction \"texto\" número")
+		fmt.Println("   Ejemplo: go run main.go complexFunction \"Go\" 10")
+	default:
+		fmt.Printf("   Función '%s' sin parámetros\n", functionName)
+		fmt.Printf("   Uso: go run main.go %s\n", functionName)
+	}
 }
 
 func executeFunction(db *sql.DB, functionName string, params []FunctionParam) {
