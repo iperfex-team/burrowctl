@@ -1,174 +1,194 @@
-# Burrowctl Server Examples
+# 🚀 Server Examples
 
-Este directorio contiene ejemplos para ejecutar el servidor burrowctl con todas sus funcionalidades.
+Este directorio contiene ejemplos del servidor burrowctl organizados por nivel de complejidad.
 
-## Archivos Incluidos
+## 📁 Estructura
 
-### `server_example.go`
-Servidor principal que implementa todas las funcionalidades:
-- **📊 SQL Queries** - Ejecuta consultas SQL remotas
-- **🔧 Functions** - Ejecuta funciones remotas con parámetros tipados
-- **⚡ Commands** - Ejecuta comandos del sistema
-
-#### Funciones Disponibles (16 total):
-- **Sin parámetros:** `returnBool`, `returnInt`, `returnString`, `returnStruct`, `returnIntArray`, `returnStringArray`, `returnJSON`, `returnError`
-- **Con parámetros:** `lengthOfString`, `isEven`, `sumArray`, `greetPerson`, `validateString`, `flagToPerson`, `modifyJSON`
-- **Múltiples valores:** `complexFunction`
-
-### `demo-func.go`
-Archivo de documentación que muestra ejemplos de todas las funciones disponibles y cómo construir las solicitudes JSON.
-
-### Archivos Docker
-- `docker-compose.yml` - Configuración completa con RabbitMQ y MariaDB
-- `docker-compose-basic.yml` - Configuración básica
-- `init.sql` - Script de inicialización de la base de datos
-
-## Configuración
-
-### Variables de Entorno (Opcionales)
-```bash
-export BURROWCTL_DEVICE_ID="tu-device-id"
-export BURROWCTL_AMQP_URL="amqp://user:pass@host:port/"
-export BURROWCTL_MYSQL_DSN="user:pass@tcp(host:port)/db?parseTime=true"
-export BURROWCTL_CONNECTION_MODE="open"  # o "close"
+```
+examples/server/
+├── basic/          # Ejemplo básico para empezar
+└── advanced/       # Ejemplo empresarial con características avanzadas
 ```
 
-Si no se configuran, se usan valores por defecto para Docker.
+## 🎯 Ejemplos Disponibles
 
-## Ejecución
+### 📋 **Basic** (`basic/`)
+Ejemplo fundamental del servidor burrowctl con configuración estándar.
 
-### 1. Con Docker (Recomendado)
+**Características:**
+- Configuración básica de servidor
+- Registro de funciones de ejemplo
+- Docker Compose para desarrollo
+- Pool de conexiones por defecto
+
+**Archivos:**
+- `server_example.go` - Servidor básico con funciones de ejemplo
+- `docker-compose.yml` - Entorno completo (RabbitMQ + MariaDB + App)
+- `docker-compose-basic.yml` - Solo servicios (RabbitMQ + MariaDB)
+- `init.sql` - Inicialización de base de datos
+- `README.md` - Documentación del ejemplo básico
+
+### 🚀 **Advanced** (`advanced/`)
+Ejemplo empresarial con todas las características de rendimiento y configuración granular.
+
+**Características:**
+- Worker Pool configurable (5-50+ workers)
+- Rate Limiting por cliente IP
+- Connection Pooling optimizado
+- Configuración avanzada via flags
+- Métricas de rendimiento en tiempo real
+
+**Archivos:**
+- `advanced_server_example.go` - Servidor empresarial configurable
+- `README.md` - Documentación detallada
+- `go.mod` - Dependencias específicas
+
+## 🏁 Inicio Rápido
+
+### Ejemplo Básico
 ```bash
-# Levantar servicios (RabbitMQ + MariaDB)
+# Iniciar servicios
+cd basic/
 docker-compose up -d
 
-# Ejecutar servidor
+# Ejecutar servidor básico
 go run server_example.go
+
+# O con Docker completo
+docker-compose -f docker-compose.yml up
 ```
 
-### 2. Ejecutar Servidor
+### Ejemplo Avanzado
 ```bash
-# Compilar
-go build -o server_example server_example.go
+# Servidor con configuración por defecto
+cd advanced/
+go run advanced_server_example.go
 
-# Ejecutar
-./server_example
+# Servidor de alto rendimiento
+go run advanced_server_example.go \
+  -workers=20 -queue-size=500 \
+  -rate-limit=50 -pool-open=50
+
+# Ver configuración actual
+go run advanced_server_example.go -show-config
+
+# Ver todas las opciones
+go run advanced_server_example.go -help
+
+# Con Docker (servidor optimizado)
+docker-compose up -d
+
+# Solo servicios (para desarrollo local)
+docker-compose -f docker-compose-basic.yml up -d
 ```
 
-### 3. Ver Documentación de Funciones
+## 🔄 Migración de Básico a Avanzado
+
+Los ejemplos son completamente compatibles. Para migrar de básico a avanzado:
+
+1. **Mantener** el código del servidor básico
+2. **Agregar** configuración avanzada según necesidades
+3. **Aprovechar** las nuevas características automáticamente
+
+### Equivalencias:
 ```bash
-# Mostrar todas las funciones disponibles y ejemplos de uso
-go run demo-func.go
+# Básico (configuración por defecto)
+go run basic/server_example.go
+
+# Avanzado (misma configuración)
+go run advanced/advanced_server_example.go \
+  -workers=10 -queue-size=100 \
+  -rate-limit=10 -pool-open=20
 ```
 
-## Salida del Servidor
+## 🐳 Docker Configuration
 
-Al iniciar, el servidor muestra:
+Cada ejemplo tiene su propia configuración Docker optimizada:
 
-```
-🚀 Starting burrowctl server...
-📱 Device ID: fd1825ec5a7b63f3fa2be9e04154d3b16f676663ba38e23d4ffafa7b0df29efb
-🐰 RabbitMQ: amqp://burrowuser:burrowpass123@rabbitmq:5672/
-🗄️  MariaDB: burrowuser:burrowpass123@tcp(mariadb:3306)/burrowdb?parseTime=true
-🔗 Connection mode: open
-
-✅ Server capabilities:
-   📊 SQL Queries - Execute remote SQL queries
-   🔧 Functions - Execute remote functions with typed parameters
-   ⚡ Commands - Execute system commands
-
-🔧 Available Functions:
-   • returnBool, returnInt, returnString, returnStruct
-   • returnIntArray, returnStringArray, returnJSON, returnError
-   • lengthOfString, isEven, sumArray, greetPerson
-   • validateString, complexFunction, flagToPerson, modifyJSON
-
-🎯 Example usage:
-   SQL:      SELECT * FROM users
-   Command:  COMMAND:ps aux
-   Function: FUNCTION:{"name":"returnString","params":[]}
+### Básico
+```yaml
+app:
+  build:
+    context: ../../..      # Raíz del proyecto
+    dockerfile: server/Dockerfile
 ```
 
-## Tipos de Solicitudes Soportadas
-
-### 1. SQL Queries
-```sql
-SELECT * FROM users WHERE id = 1
+### Avanzado
+```yaml
+app-advanced:
+  build:
+    context: ../../..      # Raíz del proyecto
+    dockerfile: examples/server/advanced/Dockerfile
+  command: ["/app/server", "-workers=20", "-queue-size=500", ...]
 ```
 
-### 2. System Commands
+### Servicios Docker:
+- **RabbitMQ**: Puerto 5672 (AMQP) y 15672 (Management UI)
+- **MariaDB**: Puerto 3306 con inicialización automática
+- **App**: Servidor burrowctl con health checks
+- **App-Advanced**: Servidor optimizado con configuración empresarial
+
+### Comandos Make:
 ```bash
-COMMAND:ps aux
-COMMAND:ls -la
-COMMAND:whoami
+# Básico
+make docker-up          # Levantar entorno básico
+make docker-down        # Detener entorno básico
+make docker-logs        # Ver logs básico
+
+# Avanzado
+make docker-up-advanced    # Levantar entorno avanzado
+make docker-down-advanced  # Detener entorno avanzado
+make docker-logs-advanced  # Ver logs avanzado
 ```
 
-### 3. Function Execution
-```json
-FUNCTION:{"name":"returnString","params":[]}
-FUNCTION:{"name":"lengthOfString","params":[{"type":"string","value":"Hello"}]}
-FUNCTION:{"name":"sumArray","params":[{"type":"[]int","value":[1,2,3,4,5]}]}
-```
+## 📊 Comparación de Ejemplos
 
-## Pool de Conexiones
+| Característica | Basic | Advanced |
+|---------------|--------|----------|
+| Worker Pool | ✅ (defecto) | ⚙️ Configurable |
+| Rate Limiting | ✅ (defecto) | ⚙️ Configurable |
+| Connection Pool | ✅ (defecto) | ⚙️ Configurable |
+| Configuración | Hardcoded | 🎛️ Via flags |
+| Monitoreo | Logs básicos | 📊 Métricas detalladas |
+| Documentación | README básico | 📚 Guía completa |
+| Docker | 🐳 Básico | 🐳 Optimizado |
+| Dockerfile | Compartido | Específico |
+| Comandos Make | docker-up | docker-up-advanced |
 
-El servidor está configurado con:
-- **MaxIdleConns:** 5 conexiones idle
-- **MaxOpenConns:** 15 conexiones máximas
-- **ConnMaxLifetime:** 5 minutos
+## 🎓 Recommended Learning Path
 
-## Clientes de Ejemplo
+1. **Empezar** con `basic/` para entender conceptos fundamentales
+2. **Experimentar** con `advanced/` para características empresariales
+3. **Personalizar** configuración según necesidades específicas
+4. **Implementar** en producción con parámetros optimizados
 
-Para probar el servidor, usa los clientes en:
-- `examples/client/sql-example/` - Para consultas SQL
-- `examples/client/command-example/` - Para comandos del sistema
-- `examples/client/function-example/` - Para ejecución de funciones
+## 🔗 Referencias
 
-## Logs
+- **Documentación Completa**: `../ADVANCED_FEATURES.md`
+- **Ejemplos de Cliente**: `../client/`
+- **Cliente Avanzado**: `../client/advanced/`
+- **Proyecto Principal**: `../../`
 
-El servidor registra todas las operaciones:
-```
-[server] received ip=192.168.1.100 type=function query={"name":"returnString","params":[]}
-[server] executing function: {"name":"returnString","params":[]}
-[server] function executed successfully
-```
+## 💡 Tips
 
-## Troubleshooting
-
-### Problemas Comunes
-
-1. **Error de conexión a RabbitMQ**
-   - Verificar que RabbitMQ esté ejecutándose
-   - Verificar credenciales y puerto
-
-2. **Error de conexión a MariaDB**
-   - Verificar que MariaDB esté ejecutándose
-   - Verificar credenciales, host y puerto
-   - Verificar que la base de datos existe
-
-3. **Función no encontrada**
-   - Verificar que el nombre de la función sea exacto
-   - Revisar la lista de funciones disponibles en `demo-func.go`
-
-### Verificar Servicios Docker
+### Para Desarrollo:
 ```bash
-# Ver logs de RabbitMQ
-docker-compose logs rabbitmq
-
-# Ver logs de MariaDB
-docker-compose logs mariadb
-
-# Ver estado de servicios
-docker-compose ps
+cd basic/
+docker-compose up -d  # Solo servicios
+go run server_example.go -debug=true
 ```
 
-## Extensión
+### Para Testing:
+```bash
+cd advanced/
+go run advanced_server_example.go \
+  -workers=2 -rate-limit=50 -debug=true
+```
 
-Para agregar nuevas funciones:
-
-1. Implementar la función en `server/server.go`
-2. Registrarla en el mapa `functions` de `getFunctionByName()`
-3. Agregar soporte de tipos si es necesario en `convertToType()`
-4. Actualizar la documentación en `demo-func.go`
-
-¡El servidor está listo para manejar todas las capacidades de burrowctl! 
+### Para Producción:
+```bash
+cd advanced/
+go run advanced_server_example.go \
+  -workers=20 -queue-size=500 \
+  -pool-open=50 -rate-limit=100
+```

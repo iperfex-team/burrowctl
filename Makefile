@@ -193,8 +193,10 @@ build-examples: ## Compila todos los ejemplos
 	cd examples/client/function-example && go build -o function-example main.go
 	@echo "$(BLUE)  → Compilando sql example...$(NC)"
 	cd examples/client/sql-example && go build -o sql-example main.go
-	@echo "$(BLUE)  → Compilando server example...$(NC)"
-	cd examples/server && go build -o server_example server_example.go
+	@echo "$(BLUE)  → Compilando server example básico...$(NC)"
+	cd examples/server/basic && go build -o server_example server_example.go
+	@echo "$(BLUE)  → Compilando server example avanzado...$(NC)"
+	cd examples/server/advanced && go build -o advanced_server_example advanced_server_example.go
 	@echo "$(GREEN)✅ Ejemplos compilados$(NC)"
 
 .PHONY: test-examples
@@ -206,14 +208,21 @@ test-examples: ## Ejecuta tests de los ejemplos
 	cd examples/client/function-example && go build -o /tmp/function-example-test main.go && rm -f /tmp/function-example-test
 	@echo "$(BLUE)  → Verificando sql example...$(NC)"
 	cd examples/client/sql-example && go build -o /tmp/sql-example-test main.go && rm -f /tmp/sql-example-test
-	@echo "$(BLUE)  → Testeando server example...$(NC)"
-	cd examples/server && go test -v ./... 2>/dev/null || echo "$(YELLOW)    No tests found - skipping$(NC)"
+	@echo "$(BLUE)  → Testeando server example básico...$(NC)"
+	cd examples/server/basic && go test -v ./... 2>/dev/null || echo "$(YELLOW)    No tests found - skipping$(NC)"
+	@echo "$(BLUE)  → Testeando server example avanzado...$(NC)"
+	cd examples/server/advanced && go test -v ./... 2>/dev/null || echo "$(YELLOW)    No tests found - skipping$(NC)"
 	@echo "$(GREEN)✅ Tests de ejemplos completados$(NC)"
 
 .PHONY: run-server-example
-run-server-example: ## Ejecuta el ejemplo del servidor
-	@echo "$(GREEN)🚀 Ejecutando server example...$(NC)"
-	cd examples/server && go run server_example.go
+run-server-example: ## Ejecuta el ejemplo del servidor básico
+	@echo "$(GREEN)🚀 Ejecutando server example básico...$(NC)"
+	cd examples/server/basic && go run server_example.go
+
+.PHONY: run-server-advanced
+run-server-advanced: ## Ejecuta el servidor avanzado con configuración personalizable
+	@echo "$(GREEN)🚀 Ejecutando server avanzado...$(NC)"
+	cd examples/server/advanced && go run advanced_server_example.go
 
 .PHONY: run-command-example
 run-command-example: ## Ejecuta el ejemplo de comando
@@ -241,21 +250,38 @@ run-client-examples: ## Ejecuta todos los ejemplos de cliente
 	cd examples/client/sql-example && go run main.go
 
 .PHONY: docker-up
-docker-up: ## Levanta el entorno Docker para los ejemplos
-	@echo "$(GREEN)🐳 Levantando entorno Docker...$(NC)"
-	cd examples/server && docker-compose up -d
-	@echo "$(GREEN)✅ Entorno Docker iniciado$(NC)"
+docker-up: ## Levanta el entorno Docker básico para los ejemplos
+	@echo "$(GREEN)🐳 Levantando entorno Docker básico...$(NC)"
+	cd examples/server/basic && docker-compose up -d
+	@echo "$(GREEN)✅ Entorno Docker básico iniciado$(NC)"
+
+.PHONY: docker-up-advanced
+docker-up-advanced: ## Levanta el entorno Docker avanzado con servidor optimizado
+	@echo "$(GREEN)🐳 Levantando entorno Docker avanzado...$(NC)"
+	cd examples/server/advanced && docker-compose up -d
+	@echo "$(GREEN)✅ Entorno Docker avanzado iniciado$(NC)"
 
 .PHONY: docker-down
-docker-down: ## Detiene el entorno Docker
-	@echo "$(GREEN)🐳 Deteniendo entorno Docker...$(NC)"
-	cd examples/server && docker-compose down
-	@echo "$(GREEN)✅ Entorno Docker detenido$(NC)"
+docker-down: ## Detiene el entorno Docker básico
+	@echo "$(GREEN)🐳 Deteniendo entorno Docker básico...$(NC)"
+	cd examples/server/basic && docker-compose down
+	@echo "$(GREEN)✅ Entorno Docker básico detenido$(NC)"
+
+.PHONY: docker-down-advanced
+docker-down-advanced: ## Detiene el entorno Docker avanzado
+	@echo "$(GREEN)🐳 Deteniendo entorno Docker avanzado...$(NC)"
+	cd examples/server/advanced && docker-compose down
+	@echo "$(GREEN)✅ Entorno Docker avanzado detenido$(NC)"
 
 .PHONY: docker-logs
-docker-logs: ## Muestra logs del entorno Docker
-	@echo "$(GREEN)📋 Mostrando logs de Docker...$(NC)"
-	cd examples/server && docker-compose logs -f
+docker-logs: ## Muestra logs del entorno Docker básico
+	@echo "$(GREEN)📋 Mostrando logs de Docker básico...$(NC)"
+	cd examples/server/basic && docker-compose logs -f
+
+.PHONY: docker-logs-advanced
+docker-logs-advanced: ## Muestra logs del entorno Docker avanzado
+	@echo "$(GREEN)📋 Mostrando logs de Docker avanzado...$(NC)"
+	cd examples/server/advanced && docker-compose logs -f
 
 .PHONY: clean-examples
 clean-examples: ## Limpia binarios de ejemplos
@@ -263,7 +289,8 @@ clean-examples: ## Limpia binarios de ejemplos
 	rm -f examples/client/command-example/command-example
 	rm -f examples/client/function-example/function-example
 	rm -f examples/client/sql-example/sql-example
-	rm -f examples/server/server_example
+	rm -f examples/server/basic/server_example
+	rm -f examples/server/advanced/advanced_server_example
 	@echo "$(GREEN)✅ Ejemplos limpiados$(NC)"
 
 .PHONY: list-examples
@@ -274,13 +301,15 @@ list-examples: ## Lista todos los ejemplos disponibles
 	@echo "  - function-example: Ejecuta funciones remotas"
 	@echo "  - sql-example: Ejecuta consultas SQL remotas"
 	@echo "$(GREEN)Server Examples:$(NC)"
-	@echo "  - server-example: Servidor que procesa las peticiones"
+	@echo "  - server-example: Servidor básico que procesa las peticiones"
+	@echo "  - server-advanced: Servidor empresarial con características avanzadas"
 	@echo ""
 	@echo "$(YELLOW)Para ejecutar un ejemplo específico:$(NC)"
 	@echo "  make run-command-example"
 	@echo "  make run-function-example"
 	@echo "  make run-sql-example"
 	@echo "  make run-server-example"
+	@echo "  make run-server-advanced"
 
 .PHONY: demo-command
 demo-command: ## Ejecuta una demostración del comando ejemplo

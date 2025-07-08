@@ -24,6 +24,7 @@ type PoolConfig struct {
 // - Core server functionality is separated from business logic
 // - Functions are registered dynamically rather than hardcoded
 // - Connection management is configurable (pooled vs per-query)
+// - Concurrent message processing through worker pools
 type Handler struct {
 	deviceID         string                 // Unique identifier for this device/server instance
 	amqpURL          string                 // RabbitMQ connection URL (amqp://user:pass@host:port/)
@@ -33,6 +34,8 @@ type Handler struct {
 	mode             string                 // Connection mode: 'open' (pooled) or 'close' (per-query)
 	poolConf         PoolConfig             // Database connection pool configuration
 	functionRegistry map[string]interface{} // Registry of custom functions available for execution
+	workerPool       *WorkerPool            // Worker pool for concurrent message processing
+	rateLimiter      *RateLimiter           // Rate limiter for controlling request frequency per client
 }
 
 // FunctionParam represents a single parameter for function execution.

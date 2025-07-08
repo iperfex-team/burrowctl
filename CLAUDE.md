@@ -96,6 +96,55 @@ The project includes complete Docker Compose setup:
 - MariaDB with automatic initialization
 - Health checks and proper startup sequencing
 
+## 🚀 Enterprise Features (NEW)
+
+burrowctl now includes enterprise-grade features for production environments:
+
+### Client Features
+- **🔄 Automatic Reconnection**: Intelligent connection recovery with exponential backoff
+- **📝 Prepared Statements**: Performance optimization and SQL injection protection
+- **⚙️ Advanced Configuration**: Customizable timeouts, debug modes, and connection parameters
+
+### Server Features  
+- **🏗️ Worker Pool**: Configurable concurrent message processing (10-50+ workers)
+- **🛡️ Rate Limiting**: Per-client IP protection using token bucket algorithm
+- **💾 Connection Pooling**: Optimized database connection management
+- **📊 Performance Tuning**: Granular control over all performance parameters
+
+### Examples
+- `examples/client/advanced/` - Advanced client with all features demonstrated
+- `examples/server/advanced/` - Enterprise server with full configuration options
+- `examples/ADVANCED_FEATURES.md` - Complete documentation and configuration guide
+
+### Configuration Examples
+```bash
+# High-performance server
+cd examples/server/advanced && go run advanced_server_example.go \
+  -workers=20 -queue-size=500 -rate-limit=50 -pool-open=50
+
+# Advanced client with reconnection
+cd examples/client/advanced && go run advanced-main.go \
+  -timeout=30s -prepared -debug=true
+
+# Stress testing
+cd examples/client/advanced && go run advanced-main.go \
+  -stress -concurrent=10 -requests=100
+```
+
+All new features are **100% backward compatible** - existing code benefits automatically.
+
+## 📋 Examples
+
+### Client Examples
+- `examples/client/sql-example/` - Basic SQL query execution
+- `examples/client/function-example/` - Remote function calls  
+- `examples/client/command-example/` - System command execution
+- `examples/client/advanced/` - **NEW**: Advanced features demo (reconnection, prepared statements, stress testing)
+
+### Server Examples
+- `examples/server/basic/` - Basic server with function registry and Docker setup
+- `examples/server/advanced/` - **NEW**: Enterprise server with configurable worker pool, rate limiting, and performance tuning
+
 ## Version Management
 
 The Makefile includes automatic versioning based on git commits, updating `version.txt` automatically. Current version is tracked in `version.txt`.

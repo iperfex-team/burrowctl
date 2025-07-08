@@ -71,7 +71,7 @@ func NewHandler(deviceID, amqpURL, mysqlDSN, mode string, poolConf *PoolConfig) 
 		}
 	}
 
-	return &Handler{
+	handler := &Handler{
 		deviceID:         deviceID,
 		amqpURL:          amqpURL,
 		mysqlDSN:         mysqlDSN,
@@ -79,6 +79,18 @@ func NewHandler(deviceID, amqpURL, mysqlDSN, mode string, poolConf *PoolConfig) 
 		poolConf:         *poolConf,
 		functionRegistry: make(map[string]interface{}), // Initialize empty function registry
 	}
+
+	// Initialize worker pool with default configuration
+	handler.workerPool = NewWorkerPool(handler, &WorkerPoolConfig{
+		WorkerCount: 10,
+		QueueSize:   100,
+		Timeout:     30 * time.Second,
+	})
+
+	// Initialize rate limiter with default configuration
+	handler.rateLimiter = NewRateLimiter(DefaultRateLimiterConfig())
+
+	return handler
 }
 
 // RegisterFunction registers a single function in the function registry.
@@ -204,15 +216,40 @@ func (h *Handler) Start(ctx context.Context) error {
 
 	log.Printf("[server] Listening on queue %s", h.deviceID)
 
+	// Start the worker pool for concurrent message processing
+	if err := h.workerPool.Start(); err != nil {
+		return fmt.Errorf("failed to start worker pool: %w", err)
+	}
+	defer h.workerPool.Stop(10 * time.Second) // 10 second shutdown timeout
+	defer h.rateLimiter.Stop() // Stop rate limiter cleanup goroutine
+
 	// Main message processing loop
 	for {
 		select {
 		case <-ctx.Done():
 			// Context cancelled, shut down gracefully
+			log.Printf("[server] Shutting down server...")
 			return nil
 		case msg := <-msgs:
-			// Process each message in a separate goroutine for concurrency
-			go h.handleMessage(ch, msg)
+			// Submit message to worker pool instead of processing directly
+			task := MessageTask{
+				Channel:   ch,
+				Message:   msg,
+				Timestamp: time.Now(),
+			}
+			
+			if err := h.workerPool.SubmitTask(task); err != nil {
+				log.Printf("[server] Failed to submit task to worker pool: %v", err)
+				// Send error response directly if worker pool fails
+				errorResp := RPCResponse{Error: "Server overloaded, please try again"}
+				if body, marshalErr := json.Marshal(errorResp); marshalErr == nil {
+					ch.PublishWithContext(ctx, "", msg.ReplyTo, false, false, amqp.Publishing{
+						ContentType:   "application/json",
+						CorrelationId: msg.CorrelationId,
+						Body:          body,
+					})
+				}
+			}
 		}
 	}
 }
@@ -231,6 +268,15 @@ func (h *Handler) handleMessage(ch *amqp.Channel, msg amqp.Delivery) {
 	var req RPCRequest
 	if err := json.Unmarshal(msg.Body, &req); err != nil {
 		h.respond(ch, msg.ReplyTo, msg.CorrelationId, RPCResponse{Error: err.Error()})
+		return
+	}
+
+	// Check rate limit before processing request
+	if !h.rateLimiter.Allow(req.ClientIP) {
+		log.Printf("[server] rate limit exceeded for client %s", req.ClientIP)
+		h.respond(ch, msg.ReplyTo, msg.CorrelationId, RPCResponse{
+			Error: "Rate limit exceeded. Please slow down your requests.",
+		})
 		return
 	}
 
