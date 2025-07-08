@@ -79,6 +79,7 @@ func NewHandler(deviceID, amqpURL, mysqlDSN, mode string, poolConf *PoolConfig) 
 		poolConf:           *poolConf,
 		functionRegistry:   make(map[string]interface{}), // Initialize empty function registry
 		transactionManager: NewTransactionManager(),      // Initialize transaction manager
+		queryCache:         NewQueryCache(DefaultQueryCacheConfig()), // Initialize query cache
 	}
 
 	// Initialize worker pool with default configuration
@@ -327,6 +328,19 @@ func (h *Handler) handleSQL(ch *amqp.Channel, msg amqp.Delivery, req RPCRequest)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
+	// Skip cache for transactions and write operations
+	useCache := req.TransactionID == "" && isReadOnlyQuery(req.Query)
+	
+	// Try to get result from cache first (only for read-only queries outside transactions)
+	if useCache {
+		if cachedResponse, found := h.queryCache.Get(req.Query, req.Params); found {
+			log.Printf("[server] Cache HIT for query: %s", truncateQuery(req.Query, 50))
+			h.respond(ch, msg.ReplyTo, msg.CorrelationId, *cachedResponse)
+			return
+		}
+		log.Printf("[server] Cache MISS for query: %s", truncateQuery(req.Query, 50))
+	}
+
 	var rows *sql.Rows
 	var err error
 
@@ -412,11 +426,20 @@ func (h *Handler) handleSQL(ch *amqp.Channel, msg amqp.Delivery, req RPCRequest)
 		data = append(data, row)
 	}
 
-	// Send successful response with query results
-	h.respond(ch, msg.ReplyTo, msg.CorrelationId, RPCResponse{
+	// Prepare response
+	response := RPCResponse{
 		Columns: cols,
 		Rows:    data,
-	})
+	}
+
+	// Cache the result if applicable (only for read-only queries outside transactions)
+	if useCache {
+		h.queryCache.Set(req.Query, req.Params, response)
+		log.Printf("[server] Query result cached: %s", truncateQuery(req.Query, 50))
+	}
+
+	// Send successful response with query results
+	h.respond(ch, msg.ReplyTo, msg.CorrelationId, response)
 }
 
 // convertDatabaseValue converts database values to appropriate JSON-serializable types.
@@ -953,4 +976,68 @@ func (h *Handler) transactionCleanupLoop(ctx context.Context) {
 			h.transactionManager.CleanupExpiredTransactions(30 * time.Minute)
 		}
 	}
+}
+
+// isReadOnlyQuery determines if a SQL query is read-only and safe to cache.
+// Only SELECT queries are considered read-only and cacheable.
+//
+// Parameters:
+//   - query: SQL query string to analyze
+//
+// Returns:
+//   - bool: true if the query is read-only and safe to cache
+func isReadOnlyQuery(query string) bool {
+	// Normalize query for analysis
+	normalized := strings.TrimSpace(strings.ToLower(query))
+	
+	// Check if it starts with SELECT
+	return strings.HasPrefix(normalized, "select")
+}
+
+// truncateQuery truncates a query string for logging purposes.
+//
+// Parameters:
+//   - query: SQL query string to truncate
+//   - maxLength: Maximum length of the truncated string
+//
+// Returns:
+//   - string: Truncated query string with ellipsis if needed
+func truncateQuery(query string, maxLength int) string {
+	if len(query) <= maxLength {
+		return query
+	}
+	return query[:maxLength] + "..."
+}
+
+// GetCacheStats returns current cache statistics for monitoring.
+func (h *Handler) GetCacheStats() CacheStats {
+	return h.queryCache.GetStats()
+}
+
+// ClearCache clears all cached query results.
+func (h *Handler) ClearCache() {
+	h.queryCache.Clear()
+}
+
+// SetCacheConfig updates the cache configuration.
+// Note: This creates a new cache instance, clearing all existing cached data.
+func (h *Handler) SetCacheConfig(config QueryCacheConfig) {
+	h.queryCache = NewQueryCache(config)
+	log.Printf("[server] Cache configuration updated")
+}
+
+// SetWorkerPoolConfig updates the worker pool configuration.
+// Note: This creates a new worker pool instance. Call before starting the server.
+func (h *Handler) SetWorkerPoolConfig(config *WorkerPoolConfig) {
+	h.workerPool = NewWorkerPool(h, config)
+	log.Printf("[server] Worker pool configuration updated: %d workers, queue size %d", 
+		config.WorkerCount, config.QueueSize)
+}
+
+// SetRateLimiterConfig updates the rate limiter configuration.
+// Note: This creates a new rate limiter instance. Call before starting the server.
+func (h *Handler) SetRateLimiterConfig(config *RateLimiterConfig) {
+	h.rateLimiter = NewRateLimiter(config)
+	log.Printf("[server] Rate limiter configuration updated: %.1f req/s, burst %d", 
+		config.RequestsPerSecond, config.BurstSize)
 }

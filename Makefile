@@ -224,6 +224,11 @@ run-server-advanced: ## Ejecuta el servidor avanzado con configuración personal
 	@echo "$(GREEN)🚀 Ejecutando server avanzado...$(NC)"
 	cd examples/server/advanced && go run advanced_server_example.go
 
+.PHONY: run-server-cache
+run-server-cache: ## Ejecuta el servidor con configuración avanzada de cache
+	@echo "$(GREEN)🚀 Ejecutando servidor con cache avanzado...$(NC)"
+	cd examples/server/advanced && go run advanced_cache_server_example.go -cache-size=2000 -cache-ttl=10m -workers=30 -rate-limit=100
+
 .PHONY: run-command-example
 run-command-example: ## Ejecuta el ejemplo de comando
 	@echo "$(GREEN)🚀 Ejecutando command example...$(NC)"
@@ -244,6 +249,11 @@ run-transaction-example: ## Ejecuta el ejemplo de transacciones
 	@echo "$(GREEN)🚀 Ejecutando transaction example...$(NC)"
 	cd examples/client/transaction-example && go run main.go
 
+.PHONY: run-cache-example
+run-cache-example: ## Ejecuta el ejemplo de cache de queries
+	@echo "$(GREEN)🚀 Ejecutando cache example...$(NC)"
+	cd examples/client/cache-example && go run main.go
+
 .PHONY: run-client-examples
 run-client-examples: ## Ejecuta todos los ejemplos de cliente
 	@echo "$(GREEN)🚀 Ejecutando todos los ejemplos de cliente...$(NC)"
@@ -255,6 +265,8 @@ run-client-examples: ## Ejecuta todos los ejemplos de cliente
 	cd examples/client/sql-example && go run main.go
 	@echo "$(BLUE)  → Ejecutando transaction example...$(NC)"
 	cd examples/client/transaction-example && go run main.go
+	@echo "$(BLUE)  → Ejecutando cache example...$(NC)"
+	cd examples/client/cache-example && go run main.go
 
 .PHONY: docker-up
 docker-up: ## Levanta el entorno Docker básico para los ejemplos
@@ -316,8 +328,10 @@ list-examples: ## Lista todos los ejemplos disponibles
 	@echo "  make run-function-example"
 	@echo "  make run-sql-example"
 	@echo "  make run-transaction-example"
+	@echo "  make run-cache-example"
 	@echo "  make run-server-example"
 	@echo "  make run-server-advanced"
+	@echo "  make run-server-cache"
 
 .PHONY: demo-command
 demo-command: ## Ejecuta una demostración del comando ejemplo

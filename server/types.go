@@ -37,6 +37,7 @@ type Handler struct {
 	workerPool         *WorkerPool            // Worker pool for concurrent message processing
 	rateLimiter        *RateLimiter           // Rate limiter for controlling request frequency per client
 	transactionManager *TransactionManager    // Transaction manager for handling database transactions
+	queryCache         *QueryCache            // Query cache for improving performance of repeated queries
 }
 
 // FunctionParam represents a single parameter for function execution.
