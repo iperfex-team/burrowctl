@@ -1,39 +1,62 @@
-
 # 🐇 burrowctl
 
-**burrowctl** is a Go library and service that provides a RabbitMQ-based bridge to remotely execute SQL queries, custom functions, and system commands on a remote device.
-The client is compatible with Go’s database/sql interface, making it easy to integrate into existing applications.
-The server listens to a dedicated queue (one per device) and executes tasks based on their **type (sql, function, command)** and sends the result back.
-This is ideal for securely controlling remote devices behind NAT or firewalls without exposing their database or SSH directly, using RabbitMQ as the transport layer.
+<div align="center">
+  <h3>Remote SQL Execution & Device Control via RabbitMQ</h3>
+  <p>
+    <strong>burrowctl</strong> is a powerful Go library and service that provides a RabbitMQ-based bridge to remotely execute SQL queries, custom functions, and system commands on devices behind NAT or firewalls.
+  </p>
+  <p>
+    <a href="./README.md">🇺🇸 English</a> | 
+    <a href="./README.es.md">🇪🇸 Español</a> | 
+    <a href="./README.pt.md">🇧🇷 Português</a>
+  </p>
+</div>
 
-It provides:  
-✅ A client compatible with Go’s `database/sql`.  
-✅ A server (device) that listens on RabbitMQ and executes tasks.  
-✅ RabbitMQ (AMQP 0-9-1) as the transport.  
-✅ Support for 3 task types: `sql`, `function`, `command`.  
-✅ Server configurable in `open` and `close` modes with optional connection pool configuration.
+## 🎯 What is burrowctl?
 
-## Example Use Case
+**burrowctl** enables secure remote database access and device control without exposing direct connections. It's perfect for:
 
-A SaaS platform needs to manage and query databases installed on customer-premises devices, which are behind NAT and cannot be accessed directly.
-The platform uses the burrowctl client to send SQL queries over RabbitMQ to the appropriate device.
-The burrowctl server running on the device receives the query, executes it against its local database, and returns the results through RabbitMQ — as if the query was executed locally.
+- 🏢 **SaaS Platforms**: Manage customer databases behind NAT/firewalls
+- 🌐 **IoT Management**: Control distributed devices securely
+- 🔐 **Remote Administration**: Execute queries and commands without SSH/direct DB access
+- 📊 **Distributed Monitoring**: Collect data from multiple remote sources
+
+## ✨ Key Features
+
+### 🔌 **Multi-Client Support**
+- **Go Client**: Native `database/sql` driver compatibility
+- **Node.js/TypeScript Client**: Modern async API with full type safety
+- **Universal DSN**: Same connection string format across all clients
+
+### 🚀 **Three Execution Types**
+- **SQL Queries**: Direct database access with parameter binding
+- **Custom Functions**: Extensible function system with 16+ built-in functions
+- **System Commands**: Execute OS commands with controlled access
+
+### 🔒 **Enterprise-Ready**
+- **Secure Transport**: RabbitMQ AMQP 0-9-1 protocol
+- **Connection Pooling**: Configurable database connection pools
+- **Error Handling**: Comprehensive error management and debugging
+- **Timeout Control**: Configurable query and command timeouts
+
+### 📦 **Production Features**
+- **Docker Support**: Complete containerized development environment
+- **Makefile Automation**: Build, test, and deployment automation
+- **Version Control**: Automatic semantic versioning
+- **Multiple Examples**: Comprehensive usage examples and documentation
 
 ---
 
-## 🚀 Features
+## 🚀 Quick Start
 
-- Go client and server libraries.
-- Client works seamlessly with Go’s `database/sql` interface.
-- Asynchronous transport using RabbitMQ.
-- JSON-based responses with results or errors.
-- Server supports `open` and `close` modes for database connections.
-- Optional connection pool tuning for `open` mode.
-- Easily extensible for additional task types.
+### Prerequisites
 
----
+- **Go 1.22+** for Go client/server
+- **Node.js 16+** for TypeScript client
+- **RabbitMQ** server running
+- **MySQL/MariaDB** database
 
-## 📦 Installation
+### Installation
 
 ```bash
 git clone https://github.com/lordbasex/burrowctl.git
@@ -41,227 +64,569 @@ cd burrowctl
 go mod tidy
 ```
 
----
+### Basic Usage
 
-## 🧪 Requirements
-
-- Running RabbitMQ server.
-- MySQL/MariaDB on the device.
-- Go >= 1.22.0.
-
----
-
-## 📄 Client
-
-The client acts as a `database/sql` driver.
-
-### Example
-
+#### Go Client (SQL)
 ```go
 package main
 
 import (
-	"database/sql"
-	"fmt"
-	"log"
-
-	_ "github.com/lordbasex/burrowctl/client"
+    "database/sql"
+    "fmt"
+    "log"
+    _ "github.com/lordbasex/burrowctl/client"
 )
 
 func main() {
-	// DSN con credenciales hardcodeadas para RabbitMQ
-	dsn := "deviceID=fd1825ec5a7b63f3fa2be9e04154d3b16f676663ba38e23d4ffafa7b0df29efb&amqp_uri=amqp://burrowuser:burrowpass123@localhost:5672/&timeout=5s&debug=true"
+    dsn := "deviceID=my-device&amqp_uri=amqp://user:pass@localhost:5672/&timeout=10s&debug=true"
+    
+    db, err := sql.Open("rabbitsql", dsn)
+    if err != nil {
+        log.Fatal("Connection failed:", err)
+    }
+    defer db.Close()
+    
+    rows, err := db.Query("SELECT id, name FROM users WHERE active = ?", true)
+    if err != nil {
+        log.Fatal("Query failed:", err)
+    }
+    defer rows.Close()
+    
+    for rows.Next() {
+        var id int
+        var name string
+        rows.Scan(&id, &name)
+        fmt.Printf("ID: %d, Name: %s\n", id, name)
+    }
+}
+```
 
-	// Abrir conexión usando el driver rabbitsql
-	db, err := sql.Open("rabbitsql", dsn)
-	if err != nil {
-		log.Fatal("Error connecting:", err)
-	}
-	defer db.Close()
+#### Node.js/TypeScript Client
+```typescript
+import { createClient } from 'burrowctl-client-nodejs';
 
-	log.Println("Executing query SELECT id, name FROM users...")
+const client = await createClient(
+  'deviceID=my-device&amqp_uri=amqp://user:pass@localhost:5672/&timeout=10s'
+);
 
-	// Ejecutar query
-	rows, err := db.Query("SELECT id, name FROM users")
-	if err != nil {
-		log.Fatal("Error executing query:", err)
-	}
-	defer rows.Close()
+const rows = await client.query('SELECT * FROM users WHERE active = ?', [true]);
+console.log('Results:', rows.getRows());
+console.log('Columns:', rows.getColumns());
 
-	fmt.Println("\n--- Results ---")
-	fmt.Printf("%-5s %-30s\n", "ID", "Nombre")
-	fmt.Println("------------------------------------")
+await client.close();
+```
 
-	// Procesar resultados
-	for rows.Next() {
-		var id int
-		var name string
-		if err := rows.Scan(&id, &name); err != nil {
-			log.Fatal("Error scanning result:", err)
-		}
-		fmt.Printf("%-5d %-30s\n", id, name)
-	}
+#### Server Setup
+```go
+package main
 
-	if err := rows.Err(); err != nil {
-		log.Fatal("Error iterating results:", err)
-	}
+import (
+    "context"
+    "log"
+    "github.com/lordbasex/burrowctl/server"
+)
 
-	fmt.Println("\n✅ Query completed successfully")
+func main() {
+    pool := &server.PoolConfig{
+        MaxIdleConns:    10,
+        MaxOpenConns:    20,
+        ConnMaxLifetime: 5 * time.Minute,
+    }
+    
+    handler := server.NewHandler(
+        "my-device",                                    // Device ID
+        "amqp://user:pass@localhost:5672/",            // RabbitMQ URI
+        "user:pass@tcp(localhost:3306)/dbname",        // MySQL DSN
+        "open",                                        // Connection mode
+        pool,                                          // Pool config
+    )
+    
+    // Register custom functions
+    handler.RegisterFunction("getSystemInfo", getSystemInfo)
+    handler.RegisterFunction("processData", processData)
+    
+    ctx := context.Background()
+    log.Println("Starting burrowctl server...")
+    if err := handler.Start(ctx); err != nil {
+        log.Fatal("Server failed:", err)
+    }
 }
 ```
 
 ---
 
-## 📄 Server (device)
+## 📖 Execution Types
 
-The server runs on the remote device.  
-It subscribes to its `deviceID` queue and executes incoming tasks.
+### 1. 🗃️ SQL Queries (`sql`)
 
-You can configure the server in two modes:
+Execute direct SQL queries with parameter binding and full transaction support.
 
-### 🔗 `open` (default)
-Keeps a pool of connections open to the database for better performance.  
-You can also customize the pool configuration with:
+```go
+// Go client
+rows, err := db.Query("SELECT * FROM products WHERE category = ? AND price > ?", "electronics", 100)
 
+// Node.js client
+const rows = await client.query("SELECT * FROM products WHERE category = ? AND price > ?", ["electronics", 100]);
+```
+
+**Features:**
+- Parameter binding for security
+- Transaction support
+- Connection pooling
+- Type-safe result handling
+
+### 2. ⚙️ Custom Functions (`function`)
+
+Execute server-side functions with typed parameters and multiple return values.
+
+```go
+// Go client - using JSON function request
+funcReq := FunctionRequest{
+    Name: "calculateTax",
+    Params: []FunctionParam{
+        {Type: "float64", Value: 100.0},
+        {Type: "string", Value: "US"},
+    },
+}
+jsonData, _ := json.Marshal(funcReq)
+rows, err := db.Query("FUNCTION:" + string(jsonData))
+```
+
+```typescript
+// Node.js client
+const result = await client.query('FUNCTION:{"name":"calculateTax","params":[{"type":"float64","value":100.0},{"type":"string","value":"US"}]}');
+```
+
+**Built-in Functions (16+):**
+- `lengthOfString`: Get string length
+- `addIntegers`: Add two integers
+- `getCurrentTimestamp`: Get current timestamp
+- `generateUUID`: Generate UUID
+- `encodeBase64`: Base64 encoding
+- `decodeBase64`: Base64 decoding
+- `parseJSON`: Parse JSON string
+- `formatJSON`: Format JSON with indentation
+- `getSystemInfo`: Get system information
+- `listFiles`: List directory contents
+- `readFile`: Read file contents
+- `writeFile`: Write file contents
+- `calculateHash`: Calculate SHA256 hash
+- `validateEmail`: Validate email address
+- `generateRandomString`: Generate random string
+- `convertTimezone`: Convert timezone
+
+### 3. 🖥️ System Commands (`command`)
+
+Execute system commands with controlled access and timeout management.
+
+```go
+// Go client
+rows, err := db.Query("COMMAND:ps aux | grep mysql")
+rows, err := db.Query("COMMAND:df -h")
+rows, err := db.Query("COMMAND:systemctl status nginx")
+```
+
+```typescript
+// Node.js client
+const result = await client.query('COMMAND:ps aux | grep mysql');
+const diskUsage = await client.query('COMMAND:df -h');
+```
+
+**Features:**
+- Stdout/stderr capture
+- Configurable timeouts
+- Line-by-line output preservation
+- Error code handling
+
+---
+
+## 🔧 Configuration
+
+### DSN Format
+```
+deviceID=<device-id>&amqp_uri=<rabbitmq-url>&timeout=<timeout>&debug=<boolean>
+```
+
+**Parameters:**
+- `deviceID`: Unique device identifier (typically SHA256 hash)
+- `amqp_uri`: RabbitMQ connection URL
+- `timeout`: Query timeout (e.g., `5s`, `30s`, `2m`)
+- `debug`: Enable debug logging (`true`/`false`)
+
+### Connection Pool Configuration
 ```go
 pool := &server.PoolConfig{
-	MaxIdleConns:    5,
-	MaxOpenConns:    15,
-	ConnMaxLifetime: 5 * time.Minute,
+    MaxIdleConns:    10,          // Maximum idle connections
+    MaxOpenConns:    20,          // Maximum open connections
+    ConnMaxLifetime: 5 * time.Minute, // Connection lifetime
 }
 ```
 
-If no `PoolConfig` is provided or any value is zero, defaults are used:
-```
-MaxIdleConns:    10
-MaxOpenConns:    20
-ConnMaxLifetime: 3m
+### Connection Modes
+- **`open`**: Maintains connection pool (default, better performance)
+- **`close`**: Opens/closes connections per query (safer, slower)
+
+---
+
+## 🛠️ Development
+
+### Quick Development Setup
+```bash
+# Clone and setup
+git clone https://github.com/lordbasex/burrowctl.git
+cd burrowctl
+
+# Start development environment (Docker)
+cd examples/server
+docker-compose up -d
+
+# Build project
+make build
+
+# Run examples
+make run-server-example
+make run-sql-example
+make run-function-example
+make run-command-example
 ```
 
-### 🔗 `close`
-Opens a new connection for each query and closes it after. Safer but slower.
+### Available Make Commands
+```bash
+make help                    # Show all available commands
+make build                   # Build all components
+make test                    # Run tests
+make clean                   # Clean build artifacts
+make docker-up              # Start Docker environment
+make docker-down            # Stop Docker environment
+make run-server-example     # Run server example
+make run-sql-example        # Run SQL client example
+make run-function-example   # Run function client example
+make run-command-example    # Run command client example
+```
 
-### Example
+### Docker Environment
+
+The project includes a complete Docker Compose environment:
+
+```yaml
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    
+  mariadb:
+    image: mariadb:10.6
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: burrowdb
+      MYSQL_USER: burrowuser
+      MYSQL_PASSWORD: burrowpass123
+    
+  burrowctl-server:
+    build: .
+    depends_on:
+      - rabbitmq
+      - mariadb
+```
+
+---
+
+## 🏗️ Architecture
+
+### System Components
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Go Client     │    │   Node.js       │    │   Future        │
+│   (database/sql)│    │   Client        │    │   Clients       │
+└─────────┬───────┘    └─────────┬───────┘    └─────────┬───────┘
+          │                      │                      │
+          └──────────────────────┼──────────────────────┘
+                                 │
+                    ┌─────────────▼──────────────┐
+                    │       RabbitMQ             │
+                    │    (AMQP 0-9-1)           │
+                    └─────────────┬──────────────┘
+                                 │
+                ┌─────────────────▼──────────────────┐
+                │        burrowctl Server            │
+                │  ┌─────────────────────────────┐   │
+                │  │    SQL Engine              │   │
+                │  │    Function Registry       │   │
+                │  │    Command Executor        │   │
+                │  └─────────────────────────────┘   │
+                └─────────────────┬──────────────────┘
+                                 │
+                    ┌─────────────▼──────────────┐
+                    │       MySQL/MariaDB        │
+                    │       File System          │
+                    │       System Commands      │
+                    └────────────────────────────┘
+```
+
+### Message Flow
+
+1. **Client**: Sends request to device-specific RabbitMQ queue
+2. **RabbitMQ**: Routes message to appropriate device queue
+3. **Server**: Processes request based on type (`sql`, `function`, `command`)
+4. **Execution**: Executes against database, function registry, or system
+5. **Response**: Returns results via RabbitMQ reply queue
+6. **Client**: Receives and processes response
+
+---
+
+## 📁 Project Structure
+
+```
+burrowctl/
+├── client/                 # Go client (database/sql driver)
+│   ├── driver.go          # SQL driver implementation
+│   ├── conn.go            # Connection management
+│   ├── rows.go            # Result handling
+│   └── rpc.go             # RabbitMQ RPC client
+├── server/                 # Core server library
+│   └── server.go          # Server implementation
+├── client-nodejs/          # Node.js/TypeScript client
+│   ├── src/               # TypeScript source
+│   ├── dist/              # Compiled JavaScript
+│   └── package.json       # NPM package configuration
+├── examples/              # Usage examples
+│   ├── client/            # Client examples
+│   │   ├── sql-example/   # SQL usage
+│   │   ├── function-example/ # Function usage
+│   │   └── command-example/  # Command usage
+│   └── server/            # Server examples
+│       ├── server_example.go # Complete server setup
+│       └── docker-compose.yml # Development environment
+├── Makefile              # Build automation
+├── go.mod               # Go module dependencies
+└── version.txt          # Version information
+```
+
+---
+
+## 🔍 Advanced Usage
+
+### Custom Function Registration
 
 ```go
-package main
+// Define custom function
+func calculateDiscount(price float64, percentage float64) (float64, error) {
+    if percentage > 100 || percentage < 0 {
+        return 0, errors.New("invalid percentage")
+    }
+    return price * (percentage / 100), nil
+}
 
-import (
-	"context"
-	"log"
-	"os"
-	"os/signal"
-	"syscall"
-	"time"
+// Register function
+handler.RegisterFunction("calculateDiscount", calculateDiscount)
+```
 
-	"github.com/lordbasex/burrowctl/server"
+### Transaction Support
+
+```go
+// Begin transaction
+tx, err := db.Begin()
+if err != nil {
+    log.Fatal(err)
+}
+
+// Execute multiple queries
+_, err = tx.Exec("INSERT INTO orders (customer_id, total) VALUES (?, ?)", 1, 100.50)
+if err != nil {
+    tx.Rollback()
+    log.Fatal(err)
+}
+
+_, err = tx.Exec("UPDATE inventory SET quantity = quantity - 1 WHERE product_id = ?", 123)
+if err != nil {
+    tx.Rollback()
+    log.Fatal(err)
+}
+
+// Commit transaction
+err = tx.Commit()
+if err != nil {
+    log.Fatal(err)
+}
+```
+
+### Error Handling
+
+```go
+// Go client
+rows, err := db.Query("SELECT * FROM users")
+if err != nil {
+    if strings.Contains(err.Error(), "timeout") {
+        log.Println("Query timed out")
+    } else if strings.Contains(err.Error(), "connection refused") {
+        log.Println("Cannot connect to RabbitMQ")
+    } else {
+        log.Printf("Query error: %v", err)
+    }
+}
+```
+
+```typescript
+// Node.js client
+try {
+    const rows = await client.query('SELECT * FROM users');
+    console.log(rows.getRows());
+} catch (error) {
+    if (error.message.includes('timeout')) {
+        console.log('Query timed out');
+    } else if (error.message.includes('connection refused')) {
+        console.log('Cannot connect to RabbitMQ');
+    } else {
+        console.error('Query error:', error.message);
+    }
+}
+```
+
+---
+
+## 🔐 Security Considerations
+
+### Best Practices
+
+1. **Use Strong Credentials**: Always use strong passwords for RabbitMQ and database
+2. **Enable TLS**: Use TLS/SSL for RabbitMQ connections in production
+3. **Limit Function Access**: Only register necessary functions on the server
+4. **Command Restrictions**: Implement command whitelisting for security
+5. **Network Isolation**: Use VPNs or private networks when possible
+6. **Monitoring**: Implement logging and monitoring for security audit
+
+### Production Configuration
+
+```go
+// Production server setup
+handler := server.NewHandler(
+    os.Getenv("DEVICE_ID"),
+    os.Getenv("AMQP_URI"),     // Use TLS: amqps://user:pass@host:5671/
+    os.Getenv("MYSQL_DSN"),    // Use SSL: ?tls=true
+    "open",
+    &server.PoolConfig{
+        MaxIdleConns:    5,
+        MaxOpenConns:    10,
+        ConnMaxLifetime: 2 * time.Minute,
+    },
 )
+```
 
-func main() {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+---
 
-	// Configurar señales para cerrar gracefully
-	go func() {
-		c := make(chan os.Signal, 1)
-		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-		<-c
-		log.Println("Closing server...")
-		cancel()
-	}()
+## 🚀 Performance Tuning
 
-	// Configuración del pool de conexiones
-	pool := &server.PoolConfig{
-		MaxIdleConns:    5,
-		MaxOpenConns:    15,
-		ConnMaxLifetime: 5 * time.Minute,
-	}
+### Connection Pool Optimization
 
-	// Crear el handler con credenciales hardcodeadas
-	h := server.NewHandler(
-		"fd1825ec5a7b63f3fa2be9e04154d3b16f676663ba38e23d4ffafa7b0df29efb",     // Device ID
-		"amqp://burrowuser:burrowpass123@localhost:5672/",                      // RabbitMQ URI
-		"burrowuser:burrowpass123@tcp(localhost:3306)/burrowdb?parseTime=true", // MariaDB DSN
-		"open", // Modo de conexión: "open" para pool de conexiones
-		pool,   // Configuración del pool
-	)
+```go
+// High-throughput configuration
+pool := &server.PoolConfig{
+    MaxIdleConns:    20,
+    MaxOpenConns:    50,
+    ConnMaxLifetime: 1 * time.Hour,
+}
+```
 
-	log.Println("Iniciando servidor burrowctl...")
-	log.Println("Device ID: fd1825ec5a7b63f3fa2be9e04154d3b16f676663ba38e23d4ffafa7b0df29efb")
-	log.Println("RabbitMQ: localhost:5672")
-	log.Println("MariaDB: localhost:3306/burrowdb")
+### Client-Side Optimization
 
-	if err := h.Start(ctx); err != nil {
-		log.Fatal("Error starting server:", err)
-	}
+```go
+// Prepare statements for repeated queries
+stmt, err := db.Prepare("SELECT * FROM users WHERE department = ?")
+if err != nil {
+    log.Fatal(err)
+}
+defer stmt.Close()
 
-	log.Println("Server closed")
+// Execute prepared statement multiple times
+for _, dept := range departments {
+    rows, err := stmt.Query(dept)
+    if err != nil {
+        log.Printf("Query failed for %s: %v", dept, err)
+        continue
+    }
+    // Process results...
+    rows.Close()
 }
 ```
 
 ---
 
-## 📖 Supported task types
+## 📊 Monitoring & Debugging
 
-### `sql`
-Executes the SQL query on the configured database.  
-Returns rows and columns as a result.
+### Enable Debug Logging
 
-### `function`
-Currently returns a mock response:
-```json
-{
-  "columns": ["message"],
-  "rows": [["function executed (mock)"]]
-}
+```go
+// DSN with debug enabled
+dsn := "deviceID=my-device&amqp_uri=amqp://localhost:5672/&debug=true"
 ```
 
-### `command`
-Currently returns a mock response:
-```json
-{
-  "columns": ["message"],
-  "rows": [["command executed (mock)"]]
-}
-```
+### Performance Metrics
 
----
-
-## 📄 Request/Response format
-
-### Request
-```json
-{
-  "type": "sql",
-  "deviceID": "<device-id>",
-  "query": "SELECT * FROM users",
-  "params": []
-}
-```
-
-### Response
-```json
-{
-  "columns": ["id", "name"],
-  "rows": [
-    [1, "Alice"],
-    [2, "Bob"]
-  ],
-  "error": ""
+```go
+// Add metrics to custom functions
+func monitoredFunction(data string) (string, error) {
+    start := time.Now()
+    defer func() {
+        duration := time.Since(start)
+        log.Printf("Function executed in %v", duration)
+    }()
+    
+    // Function logic here
+    return processData(data)
 }
 ```
 
 ---
 
-## 🐇 Project structure
+## 🤝 Contributing
 
-- Client: `client/`
-- Server: `server/`
-- Examples: `examples/`
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+
+### Development Setup
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/amazing-feature`
+3. Make your changes
+4. Add tests for new functionality
+5. Run tests: `make test`
+6. Commit your changes: `git commit -m 'Add amazing feature'`
+7. Push to the branch: `git push origin feature/amazing-feature`
+8. Open a Pull Request
 
 ---
 
-## 📋 License
+## 📜 License
 
-MIT License.
-# Version bump to 1.5.x series
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## 🆘 Support
+
+- **Documentation**: [Full documentation](./examples/)
+- **Examples**: [Usage examples](./examples/client/)
+- **Issues**: [GitHub Issues](https://github.com/lordbasex/burrowctl/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/lordbasex/burrowctl/discussions)
+
+---
+
+## 🙏 Acknowledgments
+
+- [RabbitMQ](https://www.rabbitmq.com/) for the excellent message broker
+- [Go SQL Driver](https://github.com/go-sql-driver/mysql) for MySQL connectivity
+- [AMQP 0-9-1 Go Client](https://github.com/rabbitmq/amqp091-go) for RabbitMQ integration
+- The Go and Node.js communities for their excellent ecosystems
+
+---
+
+<div align="center">
+  <p>Made with ❤️ by the burrowctl team</p>
+  <p>
+    <a href="https://github.com/lordbasex/burrowctl/stargazers">⭐ Star this project</a> | 
+    <a href="https://github.com/lordbasex/burrowctl/issues">🐛 Report Bug</a> | 
+    <a href="https://github.com/lordbasex/burrowctl/issues">💡 Request Feature</a>
+  </p>
+</div>
