@@ -26,16 +26,17 @@ type PoolConfig struct {
 // - Connection management is configurable (pooled vs per-query)
 // - Concurrent message processing through worker pools
 type Handler struct {
-	deviceID         string                 // Unique identifier for this device/server instance
-	amqpURL          string                 // RabbitMQ connection URL (amqp://user:pass@host:port/)
-	mysqlDSN         string                 // MySQL Data Source Name for database connections
-	conn             *amqp.Connection       // Active RabbitMQ connection
-	db               *sql.DB                // Database connection (used in 'open' mode)
-	mode             string                 // Connection mode: 'open' (pooled) or 'close' (per-query)
-	poolConf         PoolConfig             // Database connection pool configuration
-	functionRegistry map[string]interface{} // Registry of custom functions available for execution
-	workerPool       *WorkerPool            // Worker pool for concurrent message processing
-	rateLimiter      *RateLimiter           // Rate limiter for controlling request frequency per client
+	deviceID           string                 // Unique identifier for this device/server instance
+	amqpURL            string                 // RabbitMQ connection URL (amqp://user:pass@host:port/)
+	mysqlDSN           string                 // MySQL Data Source Name for database connections
+	conn               *amqp.Connection       // Active RabbitMQ connection
+	db                 *sql.DB                // Database connection (used in 'open' mode)
+	mode               string                 // Connection mode: 'open' (pooled) or 'close' (per-query)
+	poolConf           PoolConfig             // Database connection pool configuration
+	functionRegistry   map[string]interface{} // Registry of custom functions available for execution
+	workerPool         *WorkerPool            // Worker pool for concurrent message processing
+	rateLimiter        *RateLimiter           // Rate limiter for controlling request frequency per client
+	transactionManager *TransactionManager    // Transaction manager for handling database transactions
 }
 
 // FunctionParam represents a single parameter for function execution.
@@ -56,11 +57,13 @@ type FunctionRequest struct {
 // RPCRequest represents an incoming request from a client.
 // It contains all necessary information to process SQL queries, function calls, or system commands.
 type RPCRequest struct {
-	Type     string        `json:"type"`     // Request type: "sql", "function", or "command"
-	DeviceID string        `json:"deviceID"` // Target device ID for request routing
-	Query    string        `json:"query"`    // SQL query, function JSON, or system command
-	Params   []interface{} `json:"params"`   // Parameters for SQL queries (empty for functions/commands)
-	ClientIP string        `json:"clientIP"` // Client IP address for logging and security
+	Type          string        `json:"type"`          // Request type: "sql", "function", "command", or "transaction"
+	DeviceID      string        `json:"deviceID"`      // Target device ID for request routing
+	Query         string        `json:"query"`         // SQL query, function JSON, or system command
+	Params        []interface{} `json:"params"`        // Parameters for SQL queries (empty for functions/commands)
+	ClientIP      string        `json:"clientIP"`      // Client IP address for logging and security
+	TransactionID string        `json:"transactionID"` // Transaction ID for transaction-aware operations
+	Command       string        `json:"command"`       // Transaction command (BEGIN, COMMIT, ROLLBACK)
 }
 
 // RPCResponse represents the response sent back to clients.

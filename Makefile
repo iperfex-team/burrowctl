@@ -239,6 +239,11 @@ run-sql-example: ## Ejecuta el ejemplo de SQL
 	@echo "$(GREEN)🚀 Ejecutando sql example...$(NC)"
 	cd examples/client/sql-example && go run main.go
 
+.PHONY: run-transaction-example
+run-transaction-example: ## Ejecuta el ejemplo de transacciones
+	@echo "$(GREEN)🚀 Ejecutando transaction example...$(NC)"
+	cd examples/client/transaction-example && go run main.go
+
 .PHONY: run-client-examples
 run-client-examples: ## Ejecuta todos los ejemplos de cliente
 	@echo "$(GREEN)🚀 Ejecutando todos los ejemplos de cliente...$(NC)"
@@ -248,6 +253,8 @@ run-client-examples: ## Ejecuta todos los ejemplos de cliente
 	cd examples/client/function-example && go run main.go
 	@echo "$(BLUE)  → Ejecutando sql example...$(NC)"
 	cd examples/client/sql-example && go run main.go
+	@echo "$(BLUE)  → Ejecutando transaction example...$(NC)"
+	cd examples/client/transaction-example && go run main.go
 
 .PHONY: docker-up
 docker-up: ## Levanta el entorno Docker básico para los ejemplos
@@ -308,6 +315,7 @@ list-examples: ## Lista todos los ejemplos disponibles
 	@echo "  make run-command-example"
 	@echo "  make run-function-example"
 	@echo "  make run-sql-example"
+	@echo "  make run-transaction-example"
 	@echo "  make run-server-example"
 	@echo "  make run-server-advanced"
 

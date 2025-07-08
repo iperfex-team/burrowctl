@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"sync"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -23,9 +24,11 @@ import (
 // - Configuration including timeouts and debug settings
 // - Query execution context and error handling
 type Conn struct {
-	deviceID  string             // Target device/server identifier
-	connMgr   *ConnectionManager // Connection manager with automatic reconnection
-	config    *DSNConfig         // Parsed DSN configuration
+	deviceID       string             // Target device/server identifier
+	connMgr        *ConnectionManager // Connection manager with automatic reconnection
+	config         *DSNConfig         // Parsed DSN configuration
+	currentTx      *Tx                // Current active transaction (if any)
+	transactionMux sync.RWMutex       // Mutex for transaction state
 }
 
 // logf provides conditional debug logging based on the configuration.
@@ -78,15 +81,35 @@ func (c *Conn) Close() error {
 	return c.connMgr.Close()
 }
 
-// Begin implements the driver.Conn interface but transactions are not supported.
-// The burrowctl system operates on individual message-based requests rather
-// than transaction-based operations due to its distributed nature.
+// Begin implements the driver.Conn interface and starts a new transaction.
+// The transaction provides basic ACID properties through server-side coordination.
 //
 // Returns:
-//   - driver.Tx: Always nil
-//   - error: Always returns "transactions not supported" error
+//   - driver.Tx: New transaction instance
+//   - error: Any error that occurred during transaction start
 func (c *Conn) Begin() (driver.Tx, error) {
-	return nil, fmt.Errorf("transactions not supported")
+	c.transactionMux.Lock()
+	defer c.transactionMux.Unlock()
+
+	// Check if there's already an active transaction
+	if c.currentTx != nil && c.currentTx.IsActive() {
+		return nil, fmt.Errorf("transaction already in progress")
+	}
+
+	c.logf("Starting new transaction")
+
+	// Create new transaction
+	tx := newTransaction(c)
+
+	// Send BEGIN command to server
+	err := tx.executeTransactionCommand("BEGIN")
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %v", err)
+	}
+
+	c.currentTx = tx
+	c.logf("Transaction started: %s", tx.transactionID)
+	return tx, nil
 }
 
 // Query implements the driver.Conn interface for executing queries with arguments.
@@ -256,6 +279,14 @@ func (c *Conn) queryRPC(ctx context.Context, query string, args []driver.NamedVa
 		"clientIP": getOutboundIP(),        // Client IP for logging
 	}
 
+	// Include transaction information if we're in a transaction
+	c.transactionMux.RLock()
+	if c.currentTx != nil && c.currentTx.IsActive() {
+		req["transactionID"] = c.currentTx.GetTransactionID()
+		c.logf("Query executing in transaction: %s", c.currentTx.GetTransactionID())
+	}
+	c.transactionMux.RUnlock()
+
 	// Serialize request to JSON
 	body, _ := json.Marshal(req)
 
@@ -326,4 +357,16 @@ func argsToSlice(args []driver.NamedValue) []interface{} {
 		out = append(out, a.Value)
 	}
 	return out
+}
+
+// clearFinishedTransaction clears the current transaction reference if it's no longer active.
+// This method should be called after transaction completion to clean up resources.
+func (c *Conn) clearFinishedTransaction() {
+	c.transactionMux.Lock()
+	defer c.transactionMux.Unlock()
+
+	if c.currentTx != nil && !c.currentTx.IsActive() {
+		c.logf("Clearing finished transaction: %s", c.currentTx.GetTransactionID())
+		c.currentTx = nil
+	}
 }

@@ -72,12 +72,13 @@ func NewHandler(deviceID, amqpURL, mysqlDSN, mode string, poolConf *PoolConfig) 
 	}
 
 	handler := &Handler{
-		deviceID:         deviceID,
-		amqpURL:          amqpURL,
-		mysqlDSN:         mysqlDSN,
-		mode:             mode,
-		poolConf:         *poolConf,
-		functionRegistry: make(map[string]interface{}), // Initialize empty function registry
+		deviceID:           deviceID,
+		amqpURL:            amqpURL,
+		mysqlDSN:           mysqlDSN,
+		mode:               mode,
+		poolConf:           *poolConf,
+		functionRegistry:   make(map[string]interface{}), // Initialize empty function registry
+		transactionManager: NewTransactionManager(),      // Initialize transaction manager
 	}
 
 	// Initialize worker pool with default configuration
@@ -223,6 +224,9 @@ func (h *Handler) Start(ctx context.Context) error {
 	defer h.workerPool.Stop(10 * time.Second) // 10 second shutdown timeout
 	defer h.rateLimiter.Stop() // Stop rate limiter cleanup goroutine
 
+	// Start transaction cleanup goroutine
+	go h.transactionCleanupLoop(ctx)
+
 	// Main message processing loop
 	for {
 		select {
@@ -293,6 +297,9 @@ func (h *Handler) handleMessage(ch *amqp.Channel, msg amqp.Delivery) {
 	case "command":
 		h.handleCommand(ch, msg, req)
 
+	case "transaction":
+		h.handleTransaction(ch, msg, req)
+
 	default:
 		h.respond(ch, msg.ReplyTo, msg.CorrelationId, RPCResponse{
 			Error: fmt.Sprintf("unsupported type: %s", req.Type),
@@ -302,6 +309,7 @@ func (h *Handler) handleMessage(ch *amqp.Channel, msg amqp.Delivery) {
 
 // handleSQL processes SQL query requests with parameter binding and type conversion.
 // It supports both connection pooling (open mode) and per-query connections (close mode).
+// It also supports transaction-aware query execution.
 //
 // Parameters:
 //   - ch: RabbitMQ channel for sending responses
@@ -313,35 +321,59 @@ func (h *Handler) handleMessage(ch *amqp.Channel, msg amqp.Delivery) {
 // - Automatic parameter binding for security
 // - Type-safe column data conversion
 // - Proper connection management based on mode
+// - Transaction support for ACID operations
 func (h *Handler) handleSQL(ch *amqp.Channel, msg amqp.Delivery, req RPCRequest) {
 	// Create context with timeout to prevent long-running queries
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	var db *sql.DB
+	var rows *sql.Rows
 	var err error
 
-	// Use appropriate database connection based on configured mode
-	if h.mode == "open" {
-		// Use persistent connection pool
-		db = h.db
-	} else {
-		// Open fresh connection for this query
-		db, err = sql.Open("mysql", h.mysqlDSN)
+	// Check if this query should run within a transaction
+	if req.TransactionID != "" {
+		// Use transaction for query execution
+		transaction, exists := h.transactionManager.GetTransaction(req.TransactionID)
+		if !exists {
+			h.respond(ch, msg.ReplyTo, msg.CorrelationId, RPCResponse{
+				Error: fmt.Sprintf("transaction %s not found", req.TransactionID),
+			})
+			return
+		}
+
+		// Execute query within transaction
+		rows, err = transaction.Tx.QueryContext(ctx, req.Query, req.Params...)
 		if err != nil {
 			h.respond(ch, msg.ReplyTo, msg.CorrelationId, RPCResponse{Error: err.Error()})
 			return
 		}
-		defer db.Close()
-	}
+		defer rows.Close()
+	} else {
+		// Execute query without transaction (original behavior)
+		var db *sql.DB
+		
+		// Use appropriate database connection based on configured mode
+		if h.mode == "open" {
+			// Use persistent connection pool
+			db = h.db
+		} else {
+			// Open fresh connection for this query
+			db, err = sql.Open("mysql", h.mysqlDSN)
+			if err != nil {
+				h.respond(ch, msg.ReplyTo, msg.CorrelationId, RPCResponse{Error: err.Error()})
+				return
+			}
+			defer db.Close()
+		}
 
-	// Execute query with parameter binding for security
-	rows, err := db.QueryContext(ctx, req.Query, req.Params...)
-	if err != nil {
-		h.respond(ch, msg.ReplyTo, msg.CorrelationId, RPCResponse{Error: err.Error()})
-		return
+		// Execute query with parameter binding for security
+		rows, err = db.QueryContext(ctx, req.Query, req.Params...)
+		if err != nil {
+			h.respond(ch, msg.ReplyTo, msg.CorrelationId, RPCResponse{Error: err.Error()})
+			return
+		}
+		defer rows.Close()
 	}
-	defer rows.Close()
 
 	// Get column names for response structure
 	cols, err := rows.Columns()
@@ -902,4 +934,23 @@ func (h *Handler) respond(ch *amqp.Channel, replyTo, corrID string, resp RPCResp
 		CorrelationId: corrID,             // Match response to original request
 		Body:          body,               // Serialized response data
 	})
+}
+
+// transactionCleanupLoop runs a periodic cleanup of expired transactions.
+// It prevents memory leaks and database connection exhaustion by rolling back
+// transactions that have been inactive for too long.
+func (h *Handler) transactionCleanupLoop(ctx context.Context) {
+	ticker := time.NewTicker(5 * time.Minute) // Cleanup every 5 minutes
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Printf("[server] Transaction cleanup loop shutting down...")
+			return
+		case <-ticker.C:
+			// Clean up transactions older than 30 minutes
+			h.transactionManager.CleanupExpiredTransactions(30 * time.Minute)
+		}
+	}
 }
