@@ -1,349 +1,159 @@
-# 🚀 Advanced Server Example
+# Advanced Server Example
 
-Este ejemplo demuestra las nuevas características empresariales del servidor burrowctl con configuración completamente personalizable.
+An enhanced burrowctl server implementation with enterprise features for high-performance environments.
 
-## 🎯 Características Demostradas
+## Features
 
-- **🏗️ Worker Pool**: Procesamiento concurrente configurable
-- **🛡️ Rate Limiting**: Protección contra abuso por cliente
-- **💾 Connection Pooling**: Optimización de conexiones de base de datos
-- **⚙️ Configuración Granular**: Control total sobre todos los parámetros
+- **Worker Pool**: Configurable concurrent request processing
+- **Rate Limiting**: Per-client IP rate limiting with burst support
+- **Connection Pooling**: Optimized database connection management
+- **Performance Monitoring**: Real-time performance metrics
+- **Graceful Shutdown**: Clean server shutdown with request draining
 
-## 🏁 Inicio Rápido
+## Usage
 
-### Local
+### Direct execution
 ```bash
-# Compilar el ejemplo
-go build advanced_server_example.go
+go run main.go
+```
 
-# Ejecutar con configuración por defecto
-./advanced_server_example
-
-# Ver configuración actual
-./advanced_server_example -show-config
-
-# Ver todas las opciones
-./advanced_server_example -help
+### Using Makefile
+```bash
+make run-server-advanced
 ```
 
 ### Docker
 ```bash
-# Levantar entorno completo (RabbitMQ + MariaDB + Servidor Avanzado)
-docker-compose up -d
-
-# Solo servicios (para ejecutar servidor local)
-docker-compose -f docker-compose-basic.yml up -d
-
-# Ver logs del servidor avanzado
-docker-compose logs -f app-advanced
-
-# Detener entorno
-docker-compose down
+make docker-up-advanced
 ```
 
-## 📋 Configuraciones Predefinidas
+## Configuration
 
-### 1. Alto Rendimiento
+### Command Line Options
+
 ```bash
-./advanced_server_example \
-  -workers=20 -queue-size=500 \
-  -pool-idle=20 -pool-open=50 \
-  -rate-limit=50 -burst-size=100
+go run main.go [options]
 ```
 
-### 2. Configuración Conservadora
+#### Performance Options
+- `-workers=20`: Number of worker goroutines (default: 10)
+- `-queue-size=500`: Worker queue size (default: 100)
+- `-rate-limit=50`: Rate limit per client IP (req/s) (default: 10)
+- `-burst-size=100`: Rate limit burst size (default: 20)
+
+#### Database Options
+- `-pool-idle=20`: Maximum idle connections (default: 5)
+- `-pool-open=50`: Maximum open connections (default: 15)
+- `-device=<id>`: Device ID for identification
+- `-amqp=<url>`: AMQP connection URL
+- `-mysql=<dsn>`: MySQL connection DSN
+
+### Example Configurations
+
+#### High Performance Mode
 ```bash
-./advanced_server_example \
-  -workers=5 -queue-size=50 \
-  -pool-idle=5 -pool-open=10 \
-  -rate-limit=5 -burst-size=10
+go run main.go -workers=50 -queue-size=1000 -rate-limit=100 -burst-size=200
 ```
 
-### 3. Desarrollo Local
+#### Database Intensive Mode
 ```bash
-./advanced_server_example \
-  -workers=3 -queue-size=20 \
-  -pool-idle=3 -pool-open=8 \
-  -rate-limit=20 -burst-size=40
+go run main.go -pool-idle=50 -pool-open=100 -workers=30
 ```
 
-## ⚙️ Opciones de Configuración
-
-### Conexión
-- `-device`: Device ID único
-- `-amqp`: URL de RabbitMQ  
-- `-mysql`: DSN de MySQL/MariaDB
-- `-mode`: Modo de conexión (open/close)
+## Performance Features
 
 ### Worker Pool
-- `-workers`: Número de workers (default: 10)
-- `-queue-size`: Tamaño del buffer (default: 100)
-- `-worker-timeout`: Timeout por tarea (default: 30s)
-
-### Database Pool
-- `-pool-idle`: Conexiones idle máximas (default: 10)
-- `-pool-open`: Conexiones totales máximas (default: 20)
-- `-pool-lifetime`: Tiempo de vida de conexión (default: 5m)
+- Configurable number of concurrent workers
+- Bounded queue with overflow protection
+- Load balancing across workers
+- Graceful shutdown support
 
 ### Rate Limiting
-- `-rate-limit`: Requests/segundo por cliente (default: 10)
-- `-burst-size`: Tokens de ráfaga máximos (default: 20)
-- `-rate-cleanup`: Intervalo de limpieza (default: 5m)
+- Per-client IP rate limiting
+- Token bucket algorithm with burst support
+- Configurable rates and burst sizes
+- Automatic cleanup of rate limit data
 
-## 📊 Ejemplos de Salida
+### Connection Pooling
+- Optimized database connection management
+- Configurable idle/open connection limits
+- Connection lifetime management
+- Health checking and reconnection
 
-### Configuración Mostrada
-```bash
-./advanced_server_example -show-config
+## Monitoring
+
+The server provides real-time performance monitoring:
+
+```
+🚀 Starting Advanced Enterprise Server...
+📊 Performance Configuration:
+  Workers: 20
+  Queue Size: 500
+  Rate Limit: 50 req/s
+  Burst Size: 100
+  Pool Idle: 20
+  Pool Open: 50
+
+⚡ Performance Metrics (every 30s):
+  Active Workers: 15/20
+  Queue Usage: 45/500
+  Rate Limit Hits: 12
+  DB Connections: 18/20 idle, 35/50 open
+  Requests/sec: 42.5
+  Avg Response Time: 15ms
 ```
 
-```
-🔧 Current Server Configuration
-===============================
+## Architecture
 
-📡 Connection:
-   Device ID: fd1825ec5a7b63f3fa2be9e04154d3b16f676663ba38e23d4ffafa7b0df29efb
-   RabbitMQ:  amqp://burrowuser:burrowpass123@rabbitmq:5672/
-   MySQL:     burrowuser:burrowpass123@tcp(mariadb:3306)/burrowdb?parseTime=true
-   Mode:      open
+### Request Flow
+1. **Rate Limiter**: Checks client IP rate limits
+2. **Worker Pool**: Assigns request to available worker
+3. **Connection Pool**: Manages database connections
+4. **Processing**: Executes the request
+5. **Response**: Returns result to client
 
-💾 Database Pool:
-   Max Idle:     10 connections
-   Max Open:     20 connections
-   Lifetime:     5m0s
+### Components
+- **RateLimiter**: Token bucket rate limiting per client IP
+- **WorkerPool**: Concurrent request processing
+- **ConnectionPool**: Database connection management
+- **PerformanceMonitor**: Real-time metrics collection
 
-🏗️  Worker Pool:
-   Workers:      10 goroutines
-   Queue Size:   100 messages
-   Timeout:      30s per task
+## Performance Tuning
 
-🛡️  Rate Limiting:
-   Rate Limit:   10 req/sec per client
-   Burst Size:   20 tokens
-   Cleanup:      5m0s interval
+### Workers
+- **Low traffic**: 5-10 workers
+- **Medium traffic**: 20-30 workers
+- **High traffic**: 50+ workers
 
-📊 Performance Estimates:
-   Max Throughput: ~600 req/min (with 10 workers)
-   Rate Limit Cap: 1000 req/sec (100 clients)
-   DB Concurrency: 20 max connections
-```
+### Queue Size
+- Should be 10-50x the number of workers
+- Larger queues provide better burst handling
+- Monitor queue usage to avoid memory issues
 
-### Servidor en Ejecución
-```
-🚀 Advanced burrowctl Server Starting
-=====================================
+### Rate Limiting
+- **Development**: 10-20 req/s per client
+- **Production**: 50-100 req/s per client
+- **High volume**: 200+ req/s per client
 
-📋 Server Configuration:
-   📱 Device ID: fd1825ec...
-   🐰 RabbitMQ: amqp://burrowuser:burrowpass123@rabbitmq:5672/
-   🗄️  MySQL: burrowuser:burrowpass123@tcp(mariadb:3306)/burrowdb
-   🔗 Mode: open
+### Database Connections
+- **Idle connections**: 20-50% of max open
+- **Max open**: Based on database server capacity
+- **Connection lifetime**: 5-30 minutes
 
-💾 Database Pool:
-   ├─ Max Idle: 10
-   ├─ Max Open: 20
-   └─ Lifetime: 5m0s
+## Compared to Basic Server
 
-🏗️  Worker Pool:
-   ├─ Workers: 10
-   ├─ Queue Size: 100
-   └─ Timeout: 30s
+| Feature | Basic Server | Advanced Server |
+|---------|-------------|-----------------|
+| Concurrency | Single-threaded | Worker pool |
+| Rate Limiting | None | Per-client IP |
+| Connection Pooling | Basic | Advanced with tuning |
+| Monitoring | Basic logs | Performance metrics |
+| Graceful Shutdown | None | Full support |
+| Configuration | Hardcoded | Command-line flags |
 
-🛡️  Rate Limiting:
-   ├─ Rate: 10 req/sec per client
-   ├─ Burst: 20 tokens
-   └─ Cleanup: 5m0s
+## Next Steps
 
-🔧 Registered Functions: 18
-   ├─ returnError
-   ├─ returnBool
-   ├─ returnInt
-   ├─ returnString
-   ├─ returnStruct
-   ├─ heavyComputation
-   └─ sleepFunction
-
-✅ Server Capabilities:
-   📊 SQL Queries - Execute remote SQL with connection pooling
-   🔧 Functions - Execute typed functions with worker pool  
-   ⚡ Commands - Execute system commands with timeout
-   🛡️  Rate Limited - Protected against abuse
-   🔄 Auto Reconnect - Client-side automatic reconnection
-
-🎯 Performance Features Active:
-   • Worker Pool: 10 concurrent message processors
-   • Connection Pool: 10-20 database connections
-   • Rate Limiting: 10 req/sec per client (burst: 20)
-   • Prepared Statements: Client-side statement caching
-   • Auto Reconnection: Client-side connection recovery
-
-⏰ Server started at: 2024-01-15T10:30:00Z
-🎯 Server is ready to accept connections...
-```
-
-### Logs en Tiempo Real
-```
-[server] Database pool initialized: idle=10 open=20 lifetime=5m0s
-[server] Worker pool started with 10 workers, queue size: 100
-[server] Queue 'fd1825ec...' declared successfully
-[server] Listening on queue fd1825ec...
-[server] received ip=192.168.1.100 type=sql query=SELECT * FROM users
-[server] rate limit exceeded for client 192.168.1.101
-[server] received ip=192.168.1.102 type=function query={"name":"returnString","params":[]}
-```
-
-## 🔍 Monitoreo y Debugging
-
-### Métricas de Rendimiento
-- **Worker Pool**: Utilización de workers y cola
-- **Rate Limiting**: Requests bloqueados por cliente
-- **DB Pool**: Conexiones activas vs disponibles
-- **Throughput**: Mensajes procesados por segundo
-
-### Indicadores Clave
-```bash
-# Logs importantes a observar:
-# - "Worker pool started" - Confirmación de inicialización
-# - "rate limit exceeded" - Protección activada
-# - "Database pool initialized" - Pool configurado
-# - "Server is ready" - Listo para conexiones
-```
-
-## 🐳 Docker Configuration
-
-El ejemplo avanzado incluye configuración Docker optimizada:
-
-```yaml
-app-advanced:
-  build:
-    context: ../../..      # Raíz del proyecto
-    dockerfile: examples/server/advanced/Dockerfile
-  command: >
-    /app/server 
-      -workers=20 
-      -queue-size=500 
-      -rate-limit=50 
-      -burst-size=100 
-      -pool-idle=20 
-      -pool-open=50
-```
-
-### Servicios Docker:
-- **RabbitMQ**: Puerto 5672 (AMQP) y 15672 (Management UI)
-- **MariaDB**: Puerto 3306 con inicialización automática
-- **App-Advanced**: Servidor burrowctl optimizado con configuración empresarial
-
-### Configuración Automática:
-- **Workers**: 20 procesadores concurrentes
-- **Queue**: Buffer de 500 mensajes
-- **Rate Limit**: 50 requests/segundo por cliente
-- **DB Pool**: 20-50 conexiones optimizadas
-
-### Comandos Docker:
-```bash
-# Levantar entorno completo
-docker-compose up -d
-
-# Solo servicios (para desarrollo local)
-docker-compose -f docker-compose-basic.yml up -d
-
-# Verificar estado
-docker-compose ps
-
-# Ver logs en tiempo real
-docker-compose logs -f app-advanced
-
-# Detener servicios
-docker-compose down
-```
-
-## 🧪 Testing
-
-### Test de Carga
-```bash
-# Usar cliente avanzado para generar carga
-cd ../client/advanced
-./advanced-main -stress -concurrent=20 -requests=100
-```
-
-### Validación de Rate Limiting
-```bash
-# Configurar límite bajo para testing
-./advanced_server_example -rate-limit=2 -burst-size=5
-
-# Generar carga que exceda límites
-cd ../client/advanced  
-./advanced-main -stress -concurrent=10 -requests=50
-```
-
-### Prueba de Worker Pool
-```bash
-# Configurar pocos workers para observar queue
-./advanced_server_example -workers=2 -queue-size=10
-
-# Generar carga concurrente
-./advanced-main -stress -concurrent=15 -requests=20
-```
-
-## 🔧 Troubleshooting
-
-### Alta Latencia
-- Aumentar `-workers` y `-queue-size`
-- Optimizar `-pool-open` para más conexiones DB
-- Revisar `-worker-timeout` para tareas lentas
-
-### Memory Usage Alto
-- Reducir `-pool-idle` y `-queue-size`
-- Ajustar `-rate-cleanup` para limpieza más frecuente
-- Usar `-mode=close` para conexiones por query
-
-### Rate Limiting Muy Agresivo
-- Aumentar `-rate-limit` y `-burst-size`
-- Revisar `-rate-cleanup` para retención de buckets
-
-### Conexiones DB Agotadas
-- Aumentar `-pool-open`
-- Reducir `-pool-lifetime` para rotación más rápida
-- Optimizar queries del cliente
-
-## 🚀 Producción
-
-### Configuración Recomendada (Carga Media)
-```bash
-./advanced_server_example \
-  -workers=15 \
-  -queue-size=300 \
-  -pool-idle=15 \
-  -pool-open=30 \
-  -rate-limit=25 \
-  -burst-size=50 \
-  -worker-timeout=45s \
-  -pool-lifetime=10m
-```
-
-### Configuración Recomendada (Alta Carga)
-```bash  
-./advanced_server_example \
-  -workers=50 \
-  -queue-size=1000 \
-  -pool-idle=25 \
-  -pool-open=100 \
-  -rate-limit=100 \
-  -burst-size=200 \
-  -worker-timeout=60s \
-  -pool-lifetime=15m
-```
-
-## 📈 Optimización
-
-1. **Monitorear** logs para identificar cuellos de botella
-2. **Ajustar** workers según CPU disponible
-3. **Configurar** pool DB según capacidad de base de datos
-4. **Calibrar** rate limiting según patrones de uso reales
-5. **Probar** bajo carga real antes de producción
-
-## 🔗 Referencias
-
-- Cliente Avanzado: `../client/advanced/`
-- Documentación Completa: `./ADVANCED_FEATURES.md`
-- Configuración Docker: `../docker-compose.yml`
+For specialized configurations:
+- [Cache Server](cache-server/README.md) - Query result caching
+- [Validation Server](validation-server/README.md) - SQL security validation
+- [Full-Featured Server](full-featured-server/README.md) - All enterprise features

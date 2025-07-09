@@ -1,194 +1,129 @@
-# 🚀 Server Examples
+# BurrowCtl Server Examples
 
-Este directorio contiene ejemplos del servidor burrowctl organizados por nivel de complejidad.
+This directory contains server examples demonstrating different capabilities and configurations of burrowctl.
 
-## 📁 Estructura
+## Structure
 
 ```
 examples/server/
-├── basic/          # Ejemplo básico para empezar
-└── advanced/       # Ejemplo empresarial con características avanzadas
+├── Dockerfile              # Universal Dockerfile for all server examples
+├── basic/                  # Simple server implementation
+│   ├── main.go            # Main server file
+│   ├── README.md          # English documentation
+│   ├── README.es.md       # Spanish documentation
+│   └── README.pt.md       # Portuguese documentation
+└── advanced/              # Enterprise server with performance features
+    ├── main.go            # Advanced server implementation
+    ├── README.md, README.es.md, README.pt.md
+    ├── cache-server/      # Specialized cache server
+    │   ├── main.go
+    │   └── README.{md,es.md,pt.md}
+    ├── validation-server/ # SQL security validation server
+    │   ├── main.go
+    │   └── README.{md,es.md,pt.md}
+    └── full-featured-server/ # Complete enterprise server
+        ├── main.go
+        └── README.{md,es.md,pt.md}
 ```
 
-## 🎯 Ejemplos Disponibles
+## Quick Start
 
-### 📋 **Basic** (`basic/`)
-Ejemplo fundamental del servidor burrowctl con configuración estándar.
-
-**Características:**
-- Configuración básica de servidor
-- Registro de funciones de ejemplo
-- Docker Compose para desarrollo
-- Pool de conexiones por defecto
-
-**Archivos:**
-- `server_example.go` - Servidor básico con funciones de ejemplo
-- `docker-compose.yml` - Entorno completo (RabbitMQ + MariaDB + App)
-- `docker-compose-basic.yml` - Solo servicios (RabbitMQ + MariaDB)
-- `init.sql` - Inicialización de base de datos
-- `README.md` - Documentación del ejemplo básico
-
-### 🚀 **Advanced** (`advanced/`)
-Ejemplo empresarial con todas las características de rendimiento y configuración granular.
-
-**Características:**
-- Worker Pool configurable (5-50+ workers)
-- Rate Limiting por cliente IP
-- Connection Pooling optimizado
-- Configuración avanzada via flags
-- Métricas de rendimiento en tiempo real
-
-**Archivos:**
-- `advanced_server_example.go` - Servidor empresarial configurable
-- `README.md` - Documentación detallada
-- `go.mod` - Dependencias específicas
-
-## 🏁 Inicio Rápido
-
-### Ejemplo Básico
+### Basic Server
 ```bash
-# Iniciar servicios
-cd basic/
-docker-compose up -d
-
-# Ejecutar servidor básico
-go run server_example.go
-
-# O con Docker completo
-docker-compose -f docker-compose.yml up
+make run-server-example
+# or
+cd basic && go run main.go
 ```
 
-### Ejemplo Avanzado
+### Advanced Server
 ```bash
-# Servidor con configuración por defecto
-cd advanced/
-go run advanced_server_example.go
-
-# Servidor de alto rendimiento
-go run advanced_server_example.go \
-  -workers=20 -queue-size=500 \
-  -rate-limit=50 -pool-open=50
-
-# Ver configuración actual
-go run advanced_server_example.go -show-config
-
-# Ver todas las opciones
-go run advanced_server_example.go -help
-
-# Con Docker (servidor optimizado)
-docker-compose up -d
-
-# Solo servicios (para desarrollo local)
-docker-compose -f docker-compose-basic.yml up -d
+make run-server-advanced
+# or  
+cd advanced && go run main.go
 ```
 
-## 🔄 Migración de Básico a Avanzado
-
-Los ejemplos son completamente compatibles. Para migrar de básico a avanzado:
-
-1. **Mantener** el código del servidor básico
-2. **Agregar** configuración avanzada según necesidades
-3. **Aprovechar** las nuevas características automáticamente
-
-### Equivalencias:
+### Specialized Servers
 ```bash
-# Básico (configuración por defecto)
-go run basic/server_example.go
-
-# Avanzado (misma configuración)
-go run advanced/advanced_server_example.go \
-  -workers=10 -queue-size=100 \
-  -rate-limit=10 -pool-open=20
+make run-server-cache        # Cache-optimized server
+make run-server-validation   # SQL validation server
+make run-server-full         # Full enterprise server
 ```
 
-## 🐳 Docker Configuration
+## Docker Usage
 
-Cada ejemplo tiene su propia configuración Docker optimizada:
+Each example includes Docker support:
 
-### Básico
-```yaml
-app:
-  build:
-    context: ../../..      # Raíz del proyecto
-    dockerfile: server/Dockerfile
-```
-
-### Avanzado
-```yaml
-app-advanced:
-  build:
-    context: ../../..      # Raíz del proyecto
-    dockerfile: examples/server/advanced/Dockerfile
-  command: ["/app/server", "-workers=20", "-queue-size=500", ...]
-```
-
-### Servicios Docker:
-- **RabbitMQ**: Puerto 5672 (AMQP) y 15672 (Management UI)
-- **MariaDB**: Puerto 3306 con inicialización automática
-- **App**: Servidor burrowctl con health checks
-- **App-Advanced**: Servidor optimizado con configuración empresarial
-
-### Comandos Make:
 ```bash
-# Básico
-make docker-up          # Levantar entorno básico
-make docker-down        # Detener entorno básico
-make docker-logs        # Ver logs básico
-
-# Avanzado
-make docker-up-advanced    # Levantar entorno avanzado
-make docker-down-advanced  # Detener entorno avanzado
-make docker-logs-advanced  # Ver logs avanzado
+make docker-up              # Basic server
+make docker-up-advanced     # Advanced server
+make docker-up-cache        # Cache server
+make docker-up-validation   # Validation server
+make docker-up-full         # Full-featured server
 ```
 
-## 📊 Comparación de Ejemplos
+## Universal Dockerfile
 
-| Característica | Basic | Advanced |
-|---------------|--------|----------|
-| Worker Pool | ✅ (defecto) | ⚙️ Configurable |
-| Rate Limiting | ✅ (defecto) | ⚙️ Configurable |
-| Connection Pool | ✅ (defecto) | ⚙️ Configurable |
-| Configuración | Hardcoded | 🎛️ Via flags |
-| Monitoreo | Logs básicos | 📊 Métricas detalladas |
-| Documentación | README básico | 📚 Guía completa |
-| Docker | 🐳 Básico | 🐳 Optimizado |
-| Dockerfile | Compartido | Específico |
-| Comandos Make | docker-up | docker-up-advanced |
+All server examples use a single `Dockerfile` located in this directory. It accepts a build argument to specify which example to build:
 
-## 🎓 Recommended Learning Path
-
-1. **Empezar** con `basic/` para entender conceptos fundamentales
-2. **Experimentar** con `advanced/` para características empresariales
-3. **Personalizar** configuración según necesidades específicas
-4. **Implementar** en producción con parámetros optimizados
-
-## 🔗 Referencias
-
-- **Documentación Completa**: `../ADVANCED_FEATURES.md`
-- **Ejemplos de Cliente**: `../client/`
-- **Cliente Avanzado**: `../client/advanced/`
-- **Proyecto Principal**: `../../`
-
-## 💡 Tips
-
-### Para Desarrollo:
 ```bash
-cd basic/
-docker-compose up -d  # Solo servicios
-go run server_example.go -debug=true
+# Build basic server
+docker build --build-arg EXAMPLE_DIR=basic -t burrowctl-basic .
+
+# Build advanced server
+docker build --build-arg EXAMPLE_DIR=advanced -t burrowctl-advanced .
+
+# Build specialized servers
+docker build --build-arg EXAMPLE_DIR=advanced/cache-server -t burrowctl-cache .
+docker build --build-arg EXAMPLE_DIR=advanced/validation-server -t burrowctl-validation .
+docker build --build-arg EXAMPLE_DIR=advanced/full-featured-server -t burrowctl-full .
 ```
 
-### Para Testing:
+## Server Comparison
+
+| Feature | Basic | Advanced | Cache | Validation | Full |
+|---------|-------|----------|-------|------------|------|
+| Worker Pool | ❌ | ✅ | ✅ | ✅ | ✅ |
+| Rate Limiting | ❌ | ✅ | ✅ | ✅ | ✅ |
+| Connection Pooling | Basic | Advanced | Advanced | Advanced | Advanced |
+| Query Caching | ❌ | ❌ | ✅ | ❌ | ✅ |
+| SQL Validation | ❌ | ❌ | ❌ | ✅ | ✅ |
+| Monitoring | Basic | Metrics | Cache Stats | Security Stats | Comprehensive |
+| Configuration | Hardcoded | CLI Flags | CLI Flags | CLI Flags | CLI Flags |
+
+## Development
+
+### File Naming Convention
+- All main files are named `main.go` for consistency
+- Binaries are automatically excluded from git via `.gitignore`
+- Use `make clean-examples` to remove compiled binaries
+
+### Adding New Examples
+1. Create new directory under `basic/` or `advanced/`
+2. Add `main.go` file
+3. Create trilingual documentation (README.md, README.es.md, README.pt.md)
+4. Update Makefile with new build and run targets
+5. Add binary names to `.gitignore`
+
+### Building and Testing
 ```bash
-cd advanced/
-go run advanced_server_example.go \
-  -workers=2 -rate-limit=50 -debug=true
+make build-examples    # Build all examples
+make test-examples     # Test all examples
+make clean-examples    # Clean binaries
 ```
 
-### Para Producción:
-```bash
-cd advanced/
-go run advanced_server_example.go \
-  -workers=20 -queue-size=500 \
-  -pool-open=50 -rate-limit=100
-```
+## Documentation Languages
+
+Each example includes documentation in three languages:
+- **English**: `README.md`
+- **Spanish**: `README.es.md` 
+- **Portuguese**: `README.pt.md`
+
+## Next Steps
+
+Choose the appropriate server example based on your needs:
+
+1. **Learning/Testing**: Start with [Basic Server](basic/README.md)
+2. **Production**: Use [Advanced Server](advanced/README.md)
+3. **High Query Volume**: Consider [Cache Server](advanced/cache-server/README.md)
+4. **Security Critical**: Use [Validation Server](advanced/validation-server/README.md)
+5. **Enterprise**: Deploy [Full-Featured Server](advanced/full-featured-server/README.md)

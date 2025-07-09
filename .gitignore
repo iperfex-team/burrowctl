@@ -75,9 +75,29 @@ go.work
 coverage.out
 coverage.html
 
-# Compiled binaries
+# Compiled binaries (all examples)
+examples/client/*/main
+examples/client/command-example/command-example
+examples/client/function-example/function-example
+examples/client/sql-example/sql-example
+examples/client/transaction-example/transaction-example
+examples/client/cache-example/cache-example
+examples/client/validation-example/validation-example
+
+# Server binaries
+examples/server/basic/server
+examples/server/advanced/advanced_server
+examples/server/advanced/cache-server/cache-server
+examples/server/advanced/validation-server/validation-server
+examples/server/advanced/full-featured-server/full-featured-server
+
+# Old binary names (for cleanup)
 examples/client/client_example
 examples/server/server_example
+examples/server/basic/server_example
+examples/server/advanced/advanced_server_example
+examples/server/advanced/advanced_cache_server_example
+examples/server/advanced/advanced_validation_server_example
 
 # Version file (auto-generated)
 version.txt 

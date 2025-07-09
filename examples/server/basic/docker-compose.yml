@@ -42,10 +42,12 @@ services:
       - burrow_network
 
   app:
-    container_name: app
+    container_name: burrowctl-server-basic
     build:
       context: ../../..
-      dockerfile: server/Dockerfile
+      dockerfile: examples/server/Dockerfile
+      args:
+        EXAMPLE_DIR: basic
     depends_on:
       mariadb:
         condition: service_healthy

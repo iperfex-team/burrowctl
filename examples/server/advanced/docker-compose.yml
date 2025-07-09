@@ -42,10 +42,12 @@ services:
       - burrow_network
 
   app-advanced:
-    container_name: app-advanced
+    container_name: burrowctl-server-advanced
     build:
       context: ../../..
-      dockerfile: examples/server/advanced/Dockerfile
+      dockerfile: examples/server/Dockerfile
+      args:
+        EXAMPLE_DIR: advanced
     depends_on:
       mariadb:
         condition: service_healthy

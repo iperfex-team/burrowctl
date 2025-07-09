@@ -1,0 +1,93 @@
+version: '3.8'
+
+services:
+  # RabbitMQ Message Broker
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: burrowctl-rabbitmq-full
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=burrowuser
+      - RABBITMQ_DEFAULT_PASS=burrowpass123
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # MariaDB Database
+  mariadb:
+    image: mariadb:10.6
+    container_name: burrowctl-mariadb-full
+    ports:
+      - "3306:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=rootpass
+      - MYSQL_DATABASE=burrowdb
+      - MYSQL_USER=burrowuser
+      - MYSQL_PASSWORD=burrowpass123
+    volumes:
+      - mariadb_data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Full-Featured BurrowCtl Server
+  burrowctl-server-full:
+    build:
+      context: ../../../../
+      dockerfile: examples/server/Dockerfile
+      args:
+        EXAMPLE_DIR: advanced/full-featured-server
+    container_name: burrowctl-server-full
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      mariadb:
+        condition: service_healthy
+    environment:
+      - DEVICE_ID=my-device
+      - AMQP_URL=amqp://burrowuser:burrowpass123@rabbitmq:5672/
+      - MYSQL_DSN=burrowuser:burrowpass123@tcp(mariadb:3306)/burrowdb
+    command: [
+      "/app/server",
+      "-cache-enabled=true",
+      "-cache-size=2000",
+      "-cache-ttl=15m",
+      "-validation-enabled=true",
+      "-strict-mode=false",
+      "-allow-ddl=false",
+      "-allow-dml=true",
+      "-workers=25",
+      "-queue-size=1000",
+      "-rate-limit=100",
+      "-burst-size=200",
+      "-pool-idle=25",
+      "-pool-open=75",
+      "-monitoring-enabled=true",
+      "-monitoring-interval=60s"
+    ]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.burrowctl.rule=Host(`burrowctl.local`)"
+
+volumes:
+  rabbitmq_data:
+  mariadb_data:
+
+networks:
+  default:
+    name: burrowctl-network-full

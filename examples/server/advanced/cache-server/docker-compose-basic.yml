@@ -1,0 +1,50 @@
+services:
+  mariadb:
+    container_name: mariadb-advanced
+    image: mariadb:10.10.2
+    ports:
+      - "3306:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql  # Monta el script de inicialización
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      - TZ=America/Argentina/Buenos_Aires
+      - MYSQL_USER=burrowuser
+      - MYSQL_PASSWORD=burrowpass123
+      - MYSQL_ROOT_PASSWORD=rootpass123
+      - MYSQL_DATABASE=burrowdb
+    restart: always
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpass123"]
+      timeout: 20s
+      retries: 10
+    networks:
+      - burrow_network
+
+  rabbitmq:
+    container_name: rabbitmq-advanced
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"  # Management UI
+    environment:
+      - RABBITMQ_DEFAULT_USER=burrowuser
+      - RABBITMQ_DEFAULT_PASS=burrowpass123
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    restart: always
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      timeout: 30s
+      retries: 10
+    networks:
+      - burrow_network
+
+volumes:
+  mariadb_data:
+  rabbitmq_data:
+
+networks:
+  burrow_network:
+    driver: bridge
