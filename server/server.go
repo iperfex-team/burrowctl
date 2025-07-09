@@ -1,6 +1,6 @@
 // Package server provides implementation for the RabbitMQ-based bridge system.
 // This file contains the core server logic, message handling, and processing methods.
-// 
+//
 // The server acts as a message consumer that listens on a device-specific RabbitMQ queue
 // and processes three types of requests:
 // 1. SQL queries - Direct database operations with parameter binding
@@ -48,12 +48,12 @@ func NewHandler(deviceID, amqpURL, mysqlDSN, mode string, poolConf *PoolConfig) 
 	if mode == "" {
 		mode = "open"
 	}
-	
+
 	// Default pool configuration optimized for typical workloads
 	defaultPool := PoolConfig{
-		MaxIdleConns:    10,                // Keep 10 idle connections ready
-		MaxOpenConns:    20,                // Allow up to 20 concurrent connections
-		ConnMaxLifetime: 3 * time.Minute,   // Refresh connections every 3 minutes
+		MaxIdleConns:    10,              // Keep 10 idle connections ready
+		MaxOpenConns:    20,              // Allow up to 20 concurrent connections
+		ConnMaxLifetime: 3 * time.Minute, // Refresh connections every 3 minutes
 	}
 
 	// Use provided pool config or defaults, filling in any missing values
@@ -77,9 +77,10 @@ func NewHandler(deviceID, amqpURL, mysqlDSN, mode string, poolConf *PoolConfig) 
 		mysqlDSN:           mysqlDSN,
 		mode:               mode,
 		poolConf:           *poolConf,
-		functionRegistry:   make(map[string]interface{}), // Initialize empty function registry
-		transactionManager: NewTransactionManager(),      // Initialize transaction manager
+		functionRegistry:   make(map[string]interface{}),             // Initialize empty function registry
+		transactionManager: NewTransactionManager(),                  // Initialize transaction manager
 		queryCache:         NewQueryCache(DefaultQueryCacheConfig()), // Initialize query cache
+		sqlValidator:       NewSQLValidator(DefaultSQLValidationConfig()), // Initialize SQL validator
 	}
 
 	// Initialize worker pool with default configuration
@@ -223,7 +224,7 @@ func (h *Handler) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to start worker pool: %w", err)
 	}
 	defer h.workerPool.Stop(10 * time.Second) // 10 second shutdown timeout
-	defer h.rateLimiter.Stop() // Stop rate limiter cleanup goroutine
+	defer h.rateLimiter.Stop()                // Stop rate limiter cleanup goroutine
 
 	// Start transaction cleanup goroutine
 	go h.transactionCleanupLoop(ctx)
@@ -242,7 +243,7 @@ func (h *Handler) Start(ctx context.Context) error {
 				Message:   msg,
 				Timestamp: time.Now(),
 			}
-			
+
 			if err := h.workerPool.SubmitTask(task); err != nil {
 				log.Printf("[server] Failed to submit task to worker pool: %v", err)
 				// Send error response directly if worker pool fails
@@ -258,7 +259,6 @@ func (h *Handler) Start(ctx context.Context) error {
 		}
 	}
 }
-
 
 // handleMessage processes incoming messages from the RabbitMQ queue.
 // It deserializes the request, logs the operation, and routes to the appropriate handler
@@ -328,9 +328,25 @@ func (h *Handler) handleSQL(ch *amqp.Channel, msg amqp.Delivery, req RPCRequest)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
+	// Validate SQL query for security and policy compliance
+	validationResult := h.sqlValidator.ValidateQuery(req.Query, req.Params)
+	if !validationResult.Valid {
+		// Query failed validation, return error
+		errorMsg := fmt.Sprintf("SQL validation failed: %s", strings.Join(validationResult.Errors, "; "))
+		log.Printf("[server] SQL validation blocked query from %s: %s (risk: %s)", 
+			req.ClientIP, truncateQuery(req.Query, 50), validationResult.Risk)
+		h.respond(ch, msg.ReplyTo, msg.CorrelationId, RPCResponse{Error: errorMsg})
+		return
+	}
+
+	// Log warnings if any
+	if len(validationResult.Warnings) > 0 {
+		log.Printf("[server] SQL validation warnings for query: %s", strings.Join(validationResult.Warnings, "; "))
+	}
+
 	// Skip cache for transactions and write operations
 	useCache := req.TransactionID == "" && isReadOnlyQuery(req.Query)
-	
+
 	// Try to get result from cache first (only for read-only queries outside transactions)
 	if useCache {
 		if cachedResponse, found := h.queryCache.Get(req.Query, req.Params); found {
@@ -365,7 +381,7 @@ func (h *Handler) handleSQL(ch *amqp.Channel, msg amqp.Delivery, req RPCRequest)
 	} else {
 		// Execute query without transaction (original behavior)
 		var db *sql.DB
-		
+
 		// Use appropriate database connection based on configured mode
 		if h.mode == "open" {
 			// Use persistent connection pool
@@ -950,7 +966,7 @@ func (h *Handler) formatResult(result interface{}) interface{} {
 func (h *Handler) respond(ch *amqp.Channel, replyTo, corrID string, resp RPCResponse) {
 	// Serialize response to JSON
 	body, _ := json.Marshal(resp)
-	
+
 	// Publish response to client's reply queue
 	ch.PublishWithContext(context.Background(), "", replyTo, false, false, amqp.Publishing{
 		ContentType:   "application/json", // Indicate JSON content for client parsing
@@ -989,7 +1005,7 @@ func (h *Handler) transactionCleanupLoop(ctx context.Context) {
 func isReadOnlyQuery(query string) bool {
 	// Normalize query for analysis
 	normalized := strings.TrimSpace(strings.ToLower(query))
-	
+
 	// Check if it starts with SELECT
 	return strings.HasPrefix(normalized, "select")
 }
@@ -1030,7 +1046,7 @@ func (h *Handler) SetCacheConfig(config QueryCacheConfig) {
 // Note: This creates a new worker pool instance. Call before starting the server.
 func (h *Handler) SetWorkerPoolConfig(config *WorkerPoolConfig) {
 	h.workerPool = NewWorkerPool(h, config)
-	log.Printf("[server] Worker pool configuration updated: %d workers, queue size %d", 
+	log.Printf("[server] Worker pool configuration updated: %d workers, queue size %d",
 		config.WorkerCount, config.QueueSize)
 }
 
@@ -1038,6 +1054,18 @@ func (h *Handler) SetWorkerPoolConfig(config *WorkerPoolConfig) {
 // Note: This creates a new rate limiter instance. Call before starting the server.
 func (h *Handler) SetRateLimiterConfig(config *RateLimiterConfig) {
 	h.rateLimiter = NewRateLimiter(config)
-	log.Printf("[server] Rate limiter configuration updated: %.1f req/s, burst %d", 
+	log.Printf("[server] Rate limiter configuration updated: %d req/s, burst %d",
 		config.RequestsPerSecond, config.BurstSize)
+}
+
+// GetSQLValidationStats returns current SQL validation statistics.
+func (h *Handler) GetSQLValidationStats() ValidationStats {
+	return h.sqlValidator.GetStats()
+}
+
+// SetSQLValidationConfig updates the SQL validation configuration.
+func (h *Handler) SetSQLValidationConfig(config SQLValidationConfig) {
+	h.sqlValidator.UpdateConfig(config)
+	log.Printf("[server] SQL validation configuration updated: enabled=%v, strict=%v", 
+		config.Enabled, config.StrictMode)
 }

@@ -229,6 +229,11 @@ run-server-cache: ## Ejecuta el servidor con configuración avanzada de cache
 	@echo "$(GREEN)🚀 Ejecutando servidor con cache avanzado...$(NC)"
 	cd examples/server/advanced && go run advanced_cache_server_example.go -cache-size=2000 -cache-ttl=10m -workers=30 -rate-limit=100
 
+.PHONY: run-server-validation
+run-server-validation: ## Ejecuta el servidor con validación SQL estricta
+	@echo "$(GREEN)🚀 Ejecutando servidor con validación SQL...$(NC)"
+	cd examples/server/advanced && go run advanced_validation_server_example.go -strict-mode=true -max-query-length=5000 -workers=20
+
 .PHONY: run-command-example
 run-command-example: ## Ejecuta el ejemplo de comando
 	@echo "$(GREEN)🚀 Ejecutando command example...$(NC)"
@@ -254,6 +259,11 @@ run-cache-example: ## Ejecuta el ejemplo de cache de queries
 	@echo "$(GREEN)🚀 Ejecutando cache example...$(NC)"
 	cd examples/client/cache-example && go run main.go
 
+.PHONY: run-validation-example
+run-validation-example: ## Ejecuta el ejemplo de validación SQL
+	@echo "$(GREEN)🚀 Ejecutando validation example...$(NC)"
+	cd examples/client/validation-example && go run main.go
+
 .PHONY: run-client-examples
 run-client-examples: ## Ejecuta todos los ejemplos de cliente
 	@echo "$(GREEN)🚀 Ejecutando todos los ejemplos de cliente...$(NC)"
@@ -267,6 +277,8 @@ run-client-examples: ## Ejecuta todos los ejemplos de cliente
 	cd examples/client/transaction-example && go run main.go
 	@echo "$(BLUE)  → Ejecutando cache example...$(NC)"
 	cd examples/client/cache-example && go run main.go
+	@echo "$(BLUE)  → Ejecutando validation example...$(NC)"
+	cd examples/client/validation-example && go run main.go
 
 .PHONY: docker-up
 docker-up: ## Levanta el entorno Docker básico para los ejemplos
@@ -329,9 +341,11 @@ list-examples: ## Lista todos los ejemplos disponibles
 	@echo "  make run-sql-example"
 	@echo "  make run-transaction-example"
 	@echo "  make run-cache-example"
+	@echo "  make run-validation-example"
 	@echo "  make run-server-example"
 	@echo "  make run-server-advanced"
 	@echo "  make run-server-cache"
+	@echo "  make run-server-validation"
 
 .PHONY: demo-command
 demo-command: ## Ejecuta una demostración del comando ejemplo

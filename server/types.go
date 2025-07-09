@@ -38,6 +38,7 @@ type Handler struct {
 	rateLimiter        *RateLimiter           // Rate limiter for controlling request frequency per client
 	transactionManager *TransactionManager    // Transaction manager for handling database transactions
 	queryCache         *QueryCache            // Query cache for improving performance of repeated queries
+	sqlValidator       *SQLValidator          // SQL validator for security and policy enforcement
 }
 
 // FunctionParam represents a single parameter for function execution.
