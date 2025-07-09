@@ -461,7 +461,17 @@ func (v *SQLValidator) incrementStructureViolations() {
 func (v *SQLValidator) GetStats() ValidationStats {
 	v.stats.mutex.RLock()
 	defer v.stats.mutex.RUnlock()
-	return v.stats
+	
+	// Return a copy of the stats without the mutex
+	return ValidationStats{
+		TotalQueries:        v.stats.TotalQueries,
+		ValidQueries:        v.stats.ValidQueries,
+		BlockedQueries:      v.stats.BlockedQueries,
+		InjectionAttempts:   v.stats.InjectionAttempts,
+		CommandViolations:   v.stats.CommandViolations,
+		StructureViolations: v.stats.StructureViolations,
+		// Don't copy the mutex
+	}
 }
 
 // UpdateConfig updates the validator configuration.

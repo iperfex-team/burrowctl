@@ -229,10 +229,20 @@ func (qc *QueryCache) GetStats() CacheStats {
 	defer qc.stats.mutex.RUnlock()
 
 	qc.mutex.RLock()
-	qc.stats.CurrentSize = len(qc.cache)
+	currentSize := len(qc.cache)
 	qc.mutex.RUnlock()
 
-	return qc.stats
+	// Return a copy of the stats without the mutex
+	return CacheStats{
+		Hits:          qc.stats.Hits,
+		Misses:        qc.stats.Misses,
+		Evictions:     qc.stats.Evictions,
+		Expirations:   qc.stats.Expirations,
+		TotalRequests: qc.stats.TotalRequests,
+		LastCleanup:   qc.stats.LastCleanup,
+		CurrentSize:   currentSize,
+		// Don't copy the mutex
+	}
 }
 
 // generateCacheKey creates a consistent cache key from query and parameters.
