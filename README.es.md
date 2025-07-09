@@ -297,12 +297,25 @@ make help                    # Mostrar todos los comandos disponibles
 make build                   # Construir todos los componentes
 make test                    # Ejecutar pruebas
 make clean                   # Limpiar artefactos de build
-make docker-up              # Iniciar entorno Docker
-make docker-down            # Detener entorno Docker
-make run-server-example     # Ejecutar ejemplo del servidor
-make run-sql-example        # Ejecutar ejemplo de cliente SQL
-make run-function-example   # Ejecutar ejemplo de cliente de funciones
-make run-command-example    # Ejecutar ejemplo de cliente de comandos
+
+# Entornos Docker
+make docker-up              # Entorno servidor básico
+make docker-up-advanced     # Entorno servidor avanzado
+make docker-up-cache        # Servidor optimizado para cache
+make docker-up-validation   # Servidor de validación SQL
+make docker-up-full         # Servidor empresarial completo
+
+# Ejemplos de servidor
+make run-server-example     # Servidor básico
+make run-server-advanced    # Servidor avanzado
+make run-server-cache       # Servidor optimizado para cache
+make run-server-validation  # Servidor de validación SQL
+make run-server-full        # Servidor empresarial completo
+
+# Ejemplos de cliente
+make run-sql-example        # Ejemplo de cliente SQL
+make run-function-example   # Ejemplo de cliente de funciones
+make run-command-example    # Ejemplo de cliente de comandos
 ```
 
 ---
@@ -383,6 +396,90 @@ burrowctl/
 ├── go.mod               # Dependencias del módulo Go
 └── version.txt          # Información de versión
 ```
+
+---
+
+## 🚀 **Ejemplos de Servidor**
+
+burrowctl ahora proporciona múltiples configuraciones de servidor para diferentes casos de uso:
+
+### 📋 **Servidor Básico** (`examples/server/basic/`)
+Implementación simple del servidor para comenzar:
+```bash
+make run-server-example
+# o
+cd examples/server/basic && go run main.go
+```
+
+### 🚀 **Servidor Avanzado** (`examples/server/advanced/`)
+Servidor empresarial con características de rendimiento:
+```bash
+make run-server-advanced
+# o
+cd examples/server/advanced && go run main.go
+```
+
+### 📈 **Servidor de Cache** (`examples/server/advanced/cache-server/`)
+Optimizado para almacenamiento en caché de consultas de alto volumen:
+```bash
+make run-server-cache
+# o
+cd examples/server/advanced/cache-server && go run main.go
+```
+
+### 🛡️ **Servidor de Validación** (`examples/server/advanced/validation-server/`)
+Enfocado en seguridad SQL y validación:
+```bash
+make run-server-validation
+# o
+cd examples/server/advanced/validation-server && go run main.go
+```
+
+### 🏢 **Servidor Completo** (`examples/server/advanced/full-featured-server/`)
+Servidor empresarial completo con todas las características:
+```bash
+make run-server-full
+# o
+cd examples/server/advanced/full-featured-server && go run main.go
+```
+
+## 🚀 **Configuración Empresarial**
+
+### Servidor de Alto Rendimiento
+```bash
+# Servidor avanzado con configuración optimizada
+cd examples/server/advanced
+go run main.go \
+  -workers=20 \
+  -queue-size=500 \
+  -rate-limit=50 \
+  -pool-open=50
+
+# O con Docker (configurado automáticamente)
+docker-compose up -d
+```
+
+### Características Avanzadas del Cliente
+```bash
+# Cliente avanzado con todas las características
+cd examples/client/advanced
+go run advanced-main.go -prepared -timeout=30s
+
+# Prueba de estrés (demo de limitación de velocidad)
+go run advanced-main.go -stress -concurrent=10 -requests=100
+
+# Demo de reconexión
+go run advanced-main.go -reconnect-demo
+```
+
+### Comparación de Rendimiento
+| Característica | Básico | Avanzado |
+|----------------|--------|----------|
+| **Rendimiento** | ~100 req/s | ~1000+ req/s |
+| **Concurrencia** | Secuencial | 10-50+ paralelo |
+| **Protección de Velocidad** | Ninguna | Limitación por cliente |
+| **Reconexión** | Manual | Automática |
+| **Preparación** | No | Sí |
 
 ---
 
