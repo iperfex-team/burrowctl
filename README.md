@@ -730,6 +730,14 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
+## 📄 License
+
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+
+Copyright (c) 2024 Federico Pereira <lord.basex@gmail.com>
+
+---
+
 <div align="center">
   <p>Made with ❤️ by the burrowctl team</p>
   <p>

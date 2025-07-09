@@ -554,6 +554,14 @@ Este proyecto está licenciado bajo la Licencia MIT - vea el archivo [LICENSE](L
 
 ---
 
+## 📄 Licencia
+
+Este proyecto está licenciado bajo la Licencia Apache 2.0 - consulte el archivo [LICENSE](LICENSE) para más detalles.
+
+Copyright (c) 2024 Federico Pereira <lord.basex@gmail.com>
+
+---
+
 <div align="center">
   <p>Hecho con ❤️ por el equipo burrowctl</p>
   <p>
