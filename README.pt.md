@@ -372,8 +372,13 @@ burrowctl/
 │   │   ├── function-example/ # Uso de funções
 │   │   └── command-example/  # Uso de comandos
 │   └── server/            # Exemplos de servidor
-│       ├── server_example.go # Configuração completa do servidor
-│       └── docker-compose.yml # Ambiente de desenvolvimento
+│       ├── Dockerfile       # Build Docker universal
+│       ├── basic/           # Servidor básico (main.go)
+│       └── advanced/        # Servidores empresariais
+│           ├── main.go      # Servidor avançado
+│           ├── cache-server/    # Otimizado para cache
+│           ├── validation-server/ # Segurança SQL
+│           └── full-featured-server/ # Empresarial completo
 ├── Makefile              # Automação de build
 ├── go.mod               # Dependências do módulo Go
 └── version.txt          # Informações de versão

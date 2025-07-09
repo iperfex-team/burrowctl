@@ -304,12 +304,25 @@ make help                    # Show all available commands
 make build                   # Build all components
 make test                    # Run tests
 make clean                   # Clean build artifacts
-make docker-up              # Start Docker environment
-make docker-down            # Stop Docker environment
-make run-server-example     # Run server example
-make run-sql-example        # Run SQL client example
-make run-function-example   # Run function client example
-make run-command-example    # Run command client example
+
+# Docker environments
+make docker-up              # Basic server environment
+make docker-up-advanced     # Advanced server environment
+make docker-up-cache        # Cache-optimized server
+make docker-up-validation   # SQL validation server
+make docker-up-full         # Full enterprise server
+
+# Server examples
+make run-server-example     # Basic server
+make run-server-advanced    # Advanced server
+make run-server-cache       # Cache-optimized server
+make run-server-validation  # SQL validation server
+make run-server-full        # Full enterprise server
+
+# Client examples
+make run-sql-example        # SQL client example
+make run-function-example   # Function client example
+make run-command-example    # Command client example
 ```
 
 ### Docker Environment
@@ -406,8 +419,13 @@ burrowctl/
 │   │   ├── function-example/ # Function usage
 │   │   └── command-example/  # Command usage
 │   └── server/            # Server examples
-│       ├── server_example.go # Complete server setup
-│       └── docker-compose.yml # Development environment
+│       ├── Dockerfile     # Universal Docker build
+│       ├── basic/         # Basic server (main.go)
+│       └── advanced/      # Enterprise servers
+│           ├── main.go    # Advanced server
+│           ├── cache-server/    # Cache-optimized
+│           ├── validation-server/ # SQL security
+│           └── full-featured-server/ # Complete enterprise
 ├── Makefile              # Build automation
 ├── go.mod               # Go module dependencies
 └── version.txt          # Version information
@@ -415,13 +433,57 @@ burrowctl/
 
 ---
 
+## 🚀 **Server Examples**
+
+burrowctl now provides multiple server configurations for different use cases:
+
+### 📋 **Basic Server** (`examples/server/basic/`)
+Simple server implementation for getting started:
+```bash
+make run-server-example
+# or
+cd examples/server/basic && go run main.go
+```
+
+### 🚀 **Advanced Server** (`examples/server/advanced/`)
+Enterprise server with performance features:
+```bash
+make run-server-advanced
+# or
+cd examples/server/advanced && go run main.go
+```
+
+### 📈 **Cache Server** (`examples/server/advanced/cache-server/`)
+Optimized for high-volume query caching:
+```bash
+make run-server-cache
+# or
+cd examples/server/advanced/cache-server && go run main.go
+```
+
+### 🛡️ **Validation Server** (`examples/server/advanced/validation-server/`)
+SQL security and validation focused:
+```bash
+make run-server-validation
+# or
+cd examples/server/advanced/validation-server && go run main.go
+```
+
+### 🏢 **Full-Featured Server** (`examples/server/advanced/full-featured-server/`)
+Complete enterprise server with all features:
+```bash
+make run-server-full
+# or
+cd examples/server/advanced/full-featured-server && go run main.go
+```
+
 ## 🚀 **Enterprise Configuration**
 
 ### High-Performance Server
 ```bash
 # Advanced server with optimized settings
 cd examples/server/advanced
-go run advanced_server_example.go \
+go run main.go \
   -workers=20 \
   -queue-size=500 \
   -rate-limit=50 \

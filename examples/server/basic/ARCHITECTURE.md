@@ -20,7 +20,7 @@ server/
 └── (sin funciones de ejemplo)
 
 examples/server/
-├── server_example.go       # Funciones de ejemplo + registro
+├── main.go       # Funciones de ejemplo + registro
 └── (todas las funciones de ejemplo)
 ```
 
@@ -41,7 +41,7 @@ func (h *Handler) RegisterFunctions(functions map[string]interface{})
 func (h *Handler) GetRegisteredFunctions() []string
 ```
 
-### 2. Ejemplo del Servidor (`examples/server/server_example.go`)
+### 2. Ejemplo del Servidor (`examples/server/main.go`)
 
 ```go
 // Todas las funciones de ejemplo están aquí
@@ -113,9 +113,9 @@ h.RegisterFunctions(functions)
 ### Para Usuarios Finales
 ```bash
 # El ejemplo funciona igual que antes
-./server_example -list        # Lista funciones disponibles
-./server_example -functions   # Documentación completa
-./server_example             # Ejecutar servidor
+./server -list        # Lista funciones disponibles
+./server -functions   # Documentación completa
+./server             # Ejecutar servidor
 ```
 
 ## Migración Completada
@@ -147,7 +147,7 @@ func (h *Handler) getFunctionByName(name string) reflect.Value {
 }
 // NO hay funciones hardcodeadas
 
-// En examples/server/server_example.go
+// En examples/server/main.go
 func returnString() string { return "Hola mundo" }
 func lengthOfString(s string) int { return len(s) }
 // Funciones en su lugar correcto

@@ -98,22 +98,22 @@ go run advanced-main.go \
 
 ```bash
 # Configuración de alto rendimiento
-go run advanced_server_example.go \
+go run main.go \
   -workers=20 -queue-size=500 \
   -pool-idle=20 -pool-open=50 \
   -rate-limit=50 -burst-size=100
 
 # Configuración conservadora
-go run advanced_server_example.go \
+go run main.go \
   -workers=5 -queue-size=50 \
   -pool-idle=5 -pool-open=10 \
   -rate-limit=5 -burst-size=10
 
 # Ver configuración actual
-go run advanced_server_example.go -show-config
+go run main.go -show-config
 
 # Ayuda completa
-go run advanced_server_example.go -help
+go run main.go -help
 ```
 
 ## 📊 Monitoreo y Métricas
@@ -273,7 +273,7 @@ rateLimitConfig := &server.RateLimiterConfig{
 go run advanced-main.go -stress -concurrent=50 -requests=1000
 
 # Monitorear rate limiting
-go run advanced_server_example.go -rate-limit=10 -burst-size=20
+go run main.go -rate-limit=10 -burst-size=20
 ```
 
 ## 🚀 Próximas Mejoras

@@ -34,7 +34,7 @@ docker-compose up -d
 ```bash
 cd examples/server/basic
 docker-compose -f docker-compose-basic.yml up -d
-go run server_example.go
+go run main.go
 ```
 
 ## 🏗️ Servidor Avanzado
@@ -60,7 +60,7 @@ docker-compose up -d
 ```bash
 cd examples/server/advanced
 docker-compose -f docker-compose-basic.yml up -d
-go run advanced_server_example.go -workers=20 -rate-limit=50
+go run main.go -workers=20 -rate-limit=50
 ```
 
 ## 🎛️ Comandos Make
@@ -83,15 +83,15 @@ make docker-logs-advanced  # Ver logs avanzado
 
 ### Básico (server/Dockerfile)
 ```dockerfile
-# Compila: server_example.go
-RUN go build -o burrowctl-server ./examples/server/basic/server_example.go
+# Compila: main.go
+RUN go build -o burrowctl-server ./examples/server/basic/main.go
 ENTRYPOINT ["/burrowctl-server"]
 ```
 
 ### Avanzado (examples/server/advanced/Dockerfile)
 ```dockerfile
-# Compila: advanced_server_example.go
-RUN go build -o burrowctl-server-advanced ./examples/server/advanced/advanced_server_example.go
+# Compila: main.go
+RUN go build -o burrowctl-server-advanced ./examples/server/advanced/main.go
 ENTRYPOINT ["/app/server"]
 ```
 
@@ -173,7 +173,7 @@ docker-compose up -d
 docker-compose -f docker-compose-basic.yml up -d
 
 # Ejecutar servidor local
-go run server_example.go  # o advanced_server_example.go
+go run main.go  # tanto basic como advanced
 
 # Conectar cliente
 cd ../client/sql-example

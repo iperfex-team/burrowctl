@@ -119,7 +119,7 @@ burrowctl now includes enterprise-grade features for production environments:
 ### Configuration Examples
 ```bash
 # High-performance server
-cd examples/server/advanced && go run advanced_server_example.go \
+cd examples/server/advanced && go run main.go \
   -workers=20 -queue-size=500 -rate-limit=50 -pool-open=50
 
 # Advanced client with reconnection
