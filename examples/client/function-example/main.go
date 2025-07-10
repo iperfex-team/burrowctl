@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/lordbasex/burrowctl/client"
 	_ "github.com/lordbasex/burrowctl/client"
 )
 
@@ -45,12 +46,25 @@ func main() {
 			return
 		}
 
+		// Demonstrate both approaches for single function
+		fmt.Println("\n🔄 Demonstrating both approaches:")
+		fmt.Println("1. Extended Client (Recommended)")
+		fmt.Println("2. Standard database/sql Interface")
+		fmt.Println("===========================================")
+
+		// Extended client approach
+		fmt.Println("\n🚀 Method 1: Extended Client")
+		executeFunctionWithArgsExtended(dsn, functionName, args)
+
+		// Standard approach
+		fmt.Println("\n🔧 Method 2: Standard database/sql Interface")
 		executeFunctionWithArgs(db, functionName, args)
 		return
 	}
 
 	// Ejecutar múltiples ejemplos de funciones
 	fmt.Println("\n🔧 --- Function Examples ---")
+	fmt.Println("Demonstrating both Extended Client and Standard Interface")
 
 	// Ejemplos de funciones sin parámetros
 	fmt.Println("\n1. Functions without parameters:")
@@ -104,6 +118,131 @@ func main() {
 
 	fmt.Println("\n✅ All function examples executed successfully")
 	showUsage()
+}
+
+// executeFunctionWithArgsExtended demonstrates the extended client approach
+func executeFunctionWithArgsExtended(dsn, functionName string, args []string) {
+	// Create extended client
+	bc, err := client.NewBurrowClient(dsn)
+	if err != nil {
+		log.Fatal("Error creating extended client:", err)
+	}
+	defer bc.Close()
+
+	fmt.Printf("🔧 Executing function: %s", functionName)
+	if len(args) > 0 {
+		fmt.Printf(" with args: %v", args)
+	}
+	fmt.Println()
+
+	// Build parameters using extended client helper functions
+	params, err := buildExtendedFunctionParams(functionName, args)
+	if err != nil {
+		log.Printf("❌ Error building parameters: %v", err)
+		showFunctionHelp(functionName)
+		return
+	}
+
+	// Execute function using extended client
+	result, err := bc.ExecFunction(functionName, params...)
+	if err != nil {
+		log.Printf("❌ Function execution failed: %v", err)
+		return
+	}
+
+	// Display structured result
+	fmt.Printf("  📋 Function: %s\n", result.Function)
+	fmt.Printf("  🕐 Executed At: %s\n", result.ExecutedAt.Format("2006-01-02 15:04:05"))
+	fmt.Printf("  ⏱️ Duration: %s\n", result.Duration)
+	fmt.Printf("  📤 Result: %v\n", result.Result)
+	
+	if result.Error != "" {
+		fmt.Printf("  ❌ Error: %s\n", result.Error)
+	}
+	
+	fmt.Println("  ✅ Extended client execution completed")
+}
+
+// buildExtendedFunctionParams builds parameters using extended client helper functions
+func buildExtendedFunctionParams(functionName string, args []string) ([]client.FunctionParam, error) {
+	switch functionName {
+	// Functions without parameters
+	case "returnError", "returnBool", "returnInt", "returnString",
+		"returnStruct", "returnIntArray", "returnStringArray", "returnJSON":
+		if len(args) > 0 {
+			return nil, fmt.Errorf("function '%s' no acepta parámetros", functionName)
+		}
+		return []client.FunctionParam{}, nil
+
+	// lengthOfString(string) int
+	case "lengthOfString":
+		if len(args) != 1 {
+			return nil, fmt.Errorf("lengthOfString requiere 1 parámetro: string")
+		}
+		return []client.FunctionParam{client.StringParam(args[0])}, nil
+
+	// isEven(int) bool
+	case "isEven":
+		if len(args) != 1 {
+			return nil, fmt.Errorf("isEven requiere 1 parámetro: int")
+		}
+		num, err := strconv.Atoi(args[0])
+		if err != nil {
+			return nil, fmt.Errorf("isEven requiere un número entero, recibido: %s", args[0])
+		}
+		return []client.FunctionParam{client.IntParam(num)}, nil
+
+	// greetPerson(Person) string
+	case "greetPerson":
+		if len(args) != 2 {
+			return nil, fmt.Errorf("greetPerson requiere 2 parámetros: nombre edad")
+		}
+		age, err := strconv.Atoi(args[1])
+		if err != nil {
+			return nil, fmt.Errorf("greetPerson: edad debe ser un número entero")
+		}
+		return []client.FunctionParam{
+			client.JSONParam(map[string]interface{}{
+				"name": args[0],
+				"age":  age,
+			}),
+		}, nil
+
+	// validateString(string) error
+	case "validateString":
+		if len(args) != 1 {
+			return nil, fmt.Errorf("validateString requiere 1 parámetro: string")
+		}
+		return []client.FunctionParam{client.StringParam(args[0])}, nil
+
+	// flagToPerson(bool) Person
+	case "flagToPerson":
+		if len(args) != 1 {
+			return nil, fmt.Errorf("flagToPerson requiere 1 parámetro: bool (true/false)")
+		}
+		flag, err := strconv.ParseBool(args[0])
+		if err != nil {
+			return nil, fmt.Errorf("flagToPerson requiere bool válido (true/false)")
+		}
+		return []client.FunctionParam{client.BoolParam(flag)}, nil
+
+	// complexFunction(string, int) (string, int, error)
+	case "complexFunction":
+		if len(args) != 2 {
+			return nil, fmt.Errorf("complexFunction requiere 2 parámetros: string int")
+		}
+		num, err := strconv.Atoi(args[1])
+		if err != nil {
+			return nil, fmt.Errorf("complexFunction: segundo parámetro debe ser entero")
+		}
+		return []client.FunctionParam{
+			client.StringParam(args[0]),
+			client.IntParam(num),
+		}, nil
+
+	default:
+		return nil, fmt.Errorf("función desconocida: %s", functionName)
+	}
 }
 
 func showUsage() {

@@ -66,6 +66,50 @@ go mod tidy
 
 ### Uso Básico
 
+#### Cliente Extendido (Recomendado)
+```go
+package main
+
+import (
+    "log"
+    "github.com/lordbasex/burrowctl/client"
+)
+
+func main() {
+    dsn := "deviceID=meu-dispositivo&amqp_uri=amqp://user:pass@localhost:5672/&timeout=10s"
+    
+    // Criar cliente extendido
+    bc, err := client.NewBurrowClient(dsn)
+    if err != nil {
+        log.Fatal("Falha na conexão:", err)
+    }
+    defer bc.Close()
+    
+    // Executar consulta SQL
+    rows, err := bc.Query("SELECT id, name FROM users WHERE active = ?", true)
+    if err != nil {
+        log.Fatal("Falha na consulta:", err)
+    }
+    defer rows.Close()
+    
+    // Executar comando do sistema
+    result, err := bc.ExecCommand("df -h")
+    if err != nil {
+        log.Fatal("Falha no comando:", err)
+    }
+    log.Printf("Saída do comando: %v", result.Stdout)
+    
+    // Executar função personalizada
+    funcResult, err := bc.ExecFunction("lengthOfString", 
+        client.StringParam("Olá, Mundo!"),
+    )
+    if err != nil {
+        log.Fatal("Falha na função:", err)
+    }
+    log.Printf("Resultado da função: %v", funcResult.Result)
+}
+```
+
 #### Cliente Go (SQL)
 ```go
 package main

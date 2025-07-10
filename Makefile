@@ -281,9 +281,16 @@ run-validation-example: ## Ejecuta el ejemplo de validación SQL
 	@echo "$(GREEN)🚀 Ejecutando validation example...$(NC)"
 	cd examples/client/validation-example && go run main.go
 
+.PHONY: run-extended-client-example
+run-extended-client-example: ## Ejecuta el ejemplo de cliente extendido
+	@echo "$(GREEN)🚀 Ejecutando extended client example...$(NC)"
+	cd examples/client/extended-client-example && go run main.go
+
 .PHONY: run-client-examples
 run-client-examples: ## Ejecuta todos los ejemplos de cliente
 	@echo "$(GREEN)🚀 Ejecutando todos los ejemplos de cliente...$(NC)"
+	@echo "$(BLUE)  → Ejecutando extended client example...$(NC)"
+	cd examples/client/extended-client-example && go run main.go
 	@echo "$(BLUE)  → Ejecutando command example...$(NC)"
 	cd examples/client/command-example && go run main.go
 	@echo "$(BLUE)  → Ejecutando function example...$(NC)"
@@ -399,6 +406,7 @@ clean-examples: ## Limpia binarios de ejemplos
 list-examples: ## Lista todos los ejemplos disponibles
 	@echo "$(BLUE)📋 Ejemplos disponibles:$(NC)"
 	@echo "$(GREEN)Client Examples:$(NC)"
+	@echo "  - extended-client-example: Demuestra el cliente extendido con interfaz mejorada"
 	@echo "  - command-example: Ejecuta comandos remotos"
 	@echo "  - function-example: Ejecuta funciones remotas"
 	@echo "  - sql-example: Ejecuta consultas SQL remotas"
@@ -410,6 +418,7 @@ list-examples: ## Lista todos los ejemplos disponibles
 	@echo "  - full-featured-server: Servidor empresarial completo con todas las características"
 	@echo ""
 	@echo "$(YELLOW)Para ejecutar un ejemplo específico:$(NC)"
+	@echo "  make run-extended-client-example"
 	@echo "  make run-command-example"
 	@echo "  make run-function-example"
 	@echo "  make run-sql-example"
