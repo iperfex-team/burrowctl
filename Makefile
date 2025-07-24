@@ -196,13 +196,13 @@ build-examples: ## Compila todos los ejemplos
 	@echo "$(BLUE)  → Compilando server example básico...$(NC)"
 	cd examples/server/basic && go build -o server main.go
 	@echo "$(BLUE)  → Compilando server example avanzado...$(NC)"
-	cd examples/server/advanced && go build -o advanced_server main.go
+	cd examples/server && go build -o advanced_server main.go
 	@echo "$(BLUE)  → Compilando cache server example...$(NC)"
-	cd examples/server/advanced/cache-server && go build -o cache-server main.go
+	cd examples/server && go build -o cache-server main.go
 	@echo "$(BLUE)  → Compilando validation server example...$(NC)"
-	cd examples/server/advanced/validation-server && go build -o validation-server main.go
+	cd examples/server && go build -o validation-server main.go
 	@echo "$(BLUE)  → Compilando full-featured server example...$(NC)"
-	cd examples/server/advanced/full-featured-server && go build -o full-featured-server main.go
+	cd examples/server && go build -o full-featured-server main.go
 	@echo "$(GREEN)✅ Ejemplos compilados$(NC)"
 
 .PHONY: test-examples
@@ -217,13 +217,13 @@ test-examples: ## Ejecuta tests de los ejemplos
 	@echo "$(BLUE)  → Testeando server example básico...$(NC)"
 	cd examples/server/basic && go test -v ./... 2>/dev/null || echo "$(YELLOW)    No tests found - skipping$(NC)"
 	@echo "$(BLUE)  → Testeando server example avanzado...$(NC)"
-	cd examples/server/advanced && go test -v ./... 2>/dev/null || echo "$(YELLOW)    No tests found - skipping$(NC)"
+	cd examples/server && go test -v ./... 2>/dev/null || echo "$(YELLOW)    No tests found - skipping$(NC)"
 	@echo "$(BLUE)  → Testeando cache server example...$(NC)"
-	cd examples/server/advanced/cache-server && go test -v ./... 2>/dev/null || echo "$(YELLOW)    No tests found - skipping$(NC)"
+	cd examples/server && go test -v ./... 2>/dev/null || echo "$(YELLOW)    No tests found - skipping$(NC)"
 	@echo "$(BLUE)  → Testeando validation server example...$(NC)"
-	cd examples/server/advanced/validation-server && go test -v ./... 2>/dev/null || echo "$(YELLOW)    No tests found - skipping$(NC)"
+	cd examples/server && go test -v ./... 2>/dev/null || echo "$(YELLOW)    No tests found - skipping$(NC)"
 	@echo "$(BLUE)  → Testeando full-featured server example...$(NC)"
-	cd examples/server/advanced/full-featured-server && go test -v ./... 2>/dev/null || echo "$(YELLOW)    No tests found - skipping$(NC)"
+	cd examples/server && go test -v ./... 2>/dev/null || echo "$(YELLOW)    No tests found - skipping$(NC)"
 	@echo "$(GREEN)✅ Tests de ejemplos completados$(NC)"
 
 .PHONY: run-server-example
@@ -234,22 +234,22 @@ run-server-example: ## Ejecuta el ejemplo del servidor básico
 .PHONY: run-server-advanced
 run-server-advanced: ## Ejecuta el servidor avanzado con configuración personalizable
 	@echo "$(GREEN)🚀 Ejecutando server avanzado...$(NC)"
-	cd examples/server/advanced && go run main.go
+	cd examples/server && go run main.go
 
 .PHONY: run-server-cache
 run-server-cache: ## Ejecuta el servidor con configuración avanzada de cache
 	@echo "$(GREEN)🚀 Ejecutando servidor con cache avanzado...$(NC)"
-	cd examples/server/advanced/cache-server && go run main.go -cache-size=2000 -cache-ttl=10m -workers=30 -rate-limit=100
+	cd examples/server && go run main.go -cache-size=2000 -cache-ttl=10m -workers=30 -rate-limit=100
 
 .PHONY: run-server-validation
 run-server-validation: ## Ejecuta el servidor con validación SQL estricta
 	@echo "$(GREEN)🚀 Ejecutando servidor con validación SQL...$(NC)"
-	cd examples/server/advanced/validation-server && go run main.go -strict-mode=true -max-query-length=5000 -workers=20
+	cd examples/server && go run main.go -strict-mode=true -max-query-length=5000 -workers=20
 
 .PHONY: run-server-full
 run-server-full: ## Ejecuta el servidor con todas las características empresariales
 	@echo "$(GREEN)🚀 Ejecutando servidor empresarial completo...$(NC)"
-	cd examples/server/advanced/full-featured-server && go run main.go -cache-enabled=true -validation-enabled=true -workers=25 -monitoring-enabled=true
+	cd examples/server && go run main.go -cache-enabled=true -validation-enabled=true -workers=25 -monitoring-enabled=true
 
 .PHONY: run-command-example
 run-command-example: ## Ejecuta el ejemplo de comando
@@ -305,89 +305,27 @@ run-client-examples: ## Ejecuta todos los ejemplos de cliente
 	cd examples/client/validation-example && go run main.go
 
 .PHONY: docker-up
-docker-up: ## Levanta el entorno Docker básico para los ejemplos
-	@echo "$(GREEN)🐳 Levantando entorno Docker básico...$(NC)"
-	cd examples/server/basic && docker-compose up -d
-	@echo "$(GREEN)✅ Entorno Docker básico iniciado$(NC)"
-
-.PHONY: docker-up-advanced
-docker-up-advanced: ## Levanta el entorno Docker avanzado con servidor optimizado
-	@echo "$(GREEN)🐳 Levantando entorno Docker avanzado...$(NC)"
-	cd examples/server/advanced && docker-compose up -d
-	@echo "$(GREEN)✅ Entorno Docker avanzado iniciado$(NC)"
-
-.PHONY: docker-up-cache
-docker-up-cache: ## Levanta el entorno Docker para el servidor con cache
-	@echo "$(GREEN)🐳 Levantando entorno Docker para cache server...$(NC)"
-	cd examples/server/advanced/cache-server && docker-compose -f docker-compose-cache.yml up -d
-	@echo "$(GREEN)✅ Entorno Docker para cache iniciado$(NC)"
-
-.PHONY: docker-up-validation
-docker-up-validation: ## Levanta el entorno Docker para el servidor con validación
-	@echo "$(GREEN)🐳 Levantando entorno Docker para validation server...$(NC)"
-	cd examples/server/advanced/validation-server && docker-compose -f docker-compose-validation.yml up -d
-	@echo "$(GREEN)✅ Entorno Docker para validation iniciado$(NC)"
-
-.PHONY: docker-up-full
-docker-up-full: ## Levanta el entorno Docker para el servidor empresarial completo
+docker-up: ## Levanta el entorno Docker para el servidor empresarial completo
 	@echo "$(GREEN)🐳 Levantando entorno Docker para full-featured server...$(NC)"
-	cd examples/server/advanced/full-featured-server && docker-compose -f docker-compose-full.yml up -d
+	cd examples/server && docker-compose -f docker-compose-full.yml up -d
 	@echo "$(GREEN)✅ Entorno Docker empresarial completo iniciado$(NC)"
 
 .PHONY: docker-down
-docker-down: ## Detiene el entorno Docker básico
-	@echo "$(GREEN)🐳 Deteniendo entorno Docker básico...$(NC)"
-	cd examples/server/basic && docker-compose down
-	@echo "$(GREEN)✅ Entorno Docker básico detenido$(NC)"
-
-.PHONY: docker-down-advanced
-docker-down-advanced: ## Detiene el entorno Docker avanzado
-	@echo "$(GREEN)🐳 Deteniendo entorno Docker avanzado...$(NC)"
-	cd examples/server/advanced && docker-compose down
-	@echo "$(GREEN)✅ Entorno Docker avanzado detenido$(NC)"
-
-.PHONY: docker-down-cache
-docker-down-cache: ## Detiene el entorno Docker para el servidor con cache
-	@echo "$(GREEN)🐳 Deteniendo entorno Docker para cache server...$(NC)"
-	cd examples/server/advanced/cache-server && docker-compose -f docker-compose-cache.yml down
-	@echo "$(GREEN)✅ Entorno Docker para cache detenido$(NC)"
-
-.PHONY: docker-down-validation
-docker-down-validation: ## Detiene el entorno Docker para el servidor con validación
-	@echo "$(GREEN)🐳 Deteniendo entorno Docker para validation server...$(NC)"
-	cd examples/server/advanced/validation-server && docker-compose -f docker-compose-validation.yml down
-	@echo "$(GREEN)✅ Entorno Docker para validation detenido$(NC)"
-
-.PHONY: docker-down-full
-docker-down-full: ## Detiene el entorno Docker para el servidor empresarial completo
-	@echo "$(GREEN)🐳 Deteniendo entorno Docker para full-featured server...$(NC)"
-	cd examples/server/advanced/full-featured-server && docker-compose -f docker-compose-full.yml down
-	@echo "$(GREEN)✅ Entorno Docker empresarial completo detenido$(NC)"
+docker-down: ## Detiene el entorno Docker
+	@echo "$(GREEN)🐳 Deteniendo entorno Docker...$(NC)"
+	cd examples/server && docker-compose down
+	@echo "$(GREEN)✅ Entorno Docker detenido$(NC)"
 
 .PHONY: docker-logs
-docker-logs: ## Muestra logs del entorno Docker básico
-	@echo "$(GREEN)📋 Mostrando logs de Docker básico...$(NC)"
-	cd examples/server/basic && docker-compose logs -f
+docker-logs: ## Muestra logs del entorno Docker
+	@echo "$(GREEN)📋 Mostrando logs de Docker...$(NC)"
+	cd examples/server && docker-compose logs -f
 
-.PHONY: docker-logs-advanced
-docker-logs-advanced: ## Muestra logs del entorno Docker avanzado
-	@echo "$(GREEN)📋 Mostrando logs de Docker avanzado...$(NC)"
-	cd examples/server/advanced && docker-compose logs -f
+.PHONY: docker-logs-app
+docker-logs-app: ## Muestra logs del entorno Docker
+	@echo "$(GREEN)📋 Mostrando logs de Docker...$(NC)"
+	cd examples/server && docker-compose logs -f app
 
-.PHONY: docker-logs-cache
-docker-logs-cache: ## Muestra logs del entorno Docker para cache server
-	@echo "$(GREEN)📋 Mostrando logs de Docker para cache server...$(NC)"
-	cd examples/server/advanced/cache-server && docker-compose -f docker-compose-cache.yml logs -f
-
-.PHONY: docker-logs-validation
-docker-logs-validation: ## Muestra logs del entorno Docker para validation server
-	@echo "$(GREEN)📋 Mostrando logs de Docker para validation server...$(NC)"
-	cd examples/server/advanced/validation-server && docker-compose -f docker-compose-validation.yml logs -f
-
-.PHONY: docker-logs-full
-docker-logs-full: ## Muestra logs del entorno Docker para full-featured server
-	@echo "$(GREEN)📋 Mostrando logs de Docker para full-featured server...$(NC)"
-	cd examples/server/advanced/full-featured-server && docker-compose -f docker-compose-full.yml logs -f
 
 .PHONY: clean-examples
 clean-examples: ## Limpia binarios de ejemplos
@@ -396,10 +334,7 @@ clean-examples: ## Limpia binarios de ejemplos
 	rm -f examples/client/function-example/function-example
 	rm -f examples/client/sql-example/sql-example
 	rm -f examples/server/basic/server
-	rm -f examples/server/advanced/advanced_server
-	rm -f examples/server/advanced/cache-server/cache-server
-	rm -f examples/server/advanced/validation-server/validation-server
-	rm -f examples/server/advanced/full-featured-server/full-featured-server
+	rm -f examples/server/server
 	@echo "$(GREEN)✅ Ejemplos limpiados$(NC)"
 
 .PHONY: list-examples

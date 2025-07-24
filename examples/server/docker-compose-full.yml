@@ -1,0 +1,134 @@
+services:
+  mariadb:
+    container_name: mariadb-full-featured
+    image: mariadb:10.10.2
+    ports:
+      - "3306:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      - TZ=America/Argentina/Buenos_Aires
+      - MYSQL_USER=burrowuser
+      - MYSQL_PASSWORD=burrowpass123
+      - MYSQL_ROOT_PASSWORD=rootpass123
+      - MYSQL_DATABASE=burrowdb
+    restart: always
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpass123"]
+      timeout: 20s
+      retries: 10
+    networks:
+      - burrow_network
+
+  rabbitmq:
+    container_name: rabbitmq-full-featured
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=burrowuser
+      - RABBITMQ_DEFAULT_PASS=burrowpass123
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    restart: always
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      timeout: 30s
+      retries: 10
+    networks:
+      - burrow_network
+
+  app:
+    container_name: app
+    build:
+      context: ../../
+      dockerfile: examples/server/Dockerfile
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - TZ=America/Argentina/Buenos_Aires
+      
+      # ========================================
+      # CONFIGURACIÓN DE CONEXIÓN Y DISPOSITIVO
+      # ========================================
+      - BURROWCTL_DEVICE_ID=fd1825ec5a7b63f3fa2be9e04154d3b16f676663ba38e23d4ffafa7b0df29efb
+      - BURROWCTL_AMQP_URL=amqp://burrowuser:burrowpass123@rabbitmq-full-featured:5672/
+      - BURROWCTL_MYSQL_DSN=burrowuser:burrowpass123@tcp(mariadb-full-featured:3306)/burrowdb?parseTime=true
+      
+      # ========================================
+      # CONFIGURACIÓN DE RECONEXIÓN RABBITMQ
+      # ========================================
+      - BURROWCTL_RECONNECT_ENABLED=true
+      - BURROWCTL_RECONNECT_MAX_ATTEMPTS=0
+      - BURROWCTL_RECONNECT_INITIAL_INTERVAL=2s
+      - BURROWCTL_RECONNECT_MAX_INTERVAL=120s
+      - BURROWCTL_RECONNECT_BACKOFF_MULTIPLIER=1.5
+      - BURROWCTL_RECONNECT_RESET_INTERVAL=10m
+      
+      # ========================================
+      # CONFIGURACIÓN DE CACHE DE QUERIES
+      # ========================================
+      - BURROWCTL_CACHE_ENABLED=true
+      - BURROWCTL_CACHE_SIZE=5000
+      - BURROWCTL_CACHE_TTL=30m
+      - BURROWCTL_CACHE_CLEANUP=10m
+      
+      # ========================================
+      # CONFIGURACIÓN DE VALIDACIÓN SQL
+      # ========================================
+      - BURROWCTL_VALIDATION_ENABLED=true
+      - BURROWCTL_STRICT_MODE=false
+      - BURROWCTL_ALLOW_DDL=false
+      - BURROWCTL_ALLOW_DML=true
+      - BURROWCTL_ALLOW_STORED_PROCS=false
+      - BURROWCTL_MAX_QUERY_LENGTH=10000
+      - BURROWCTL_LOG_VIOLATIONS=true
+      
+      # ========================================
+      # CONFIGURACIÓN DE RENDIMIENTO
+      # ========================================
+      - BURROWCTL_WORKERS=50
+      - BURROWCTL_QUEUE_SIZE=2000
+      - BURROWCTL_RATE_LIMIT=300
+      - BURROWCTL_BURST_SIZE=600
+      
+      # ========================================
+      # CONFIGURACIÓN DE BASE DE DATOS
+      # ========================================
+      - BURROWCTL_POOL_IDLE=50
+      - BURROWCTL_POOL_OPEN=100
+      - BURROWCTL_CONN_LIFETIME=15m
+      
+      # ========================================
+      # CONFIGURACIÓN DE MONITOREO
+      # ========================================
+      - BURROWCTL_MONITORING_ENABLED=true
+      - BURROWCTL_MONITORING_INTERVAL=30s
+      
+      # ========================================
+      # CONFIGURACIÓN DE HEARTBEAT
+      # ========================================
+      - BURROWCTL_HEARTBEAT_ENABLED=true
+      - BURROWCTL_HEARTBEAT_INTERVAL=10s
+      - BURROWCTL_HEARTBEAT_TIMEOUT=3s
+      - BURROWCTL_HEARTBEAT_MAX_MISSED=3
+      - BURROWCTL_HEARTBEAT_CLEANUP=30s
+      - BURROWCTL_HEARTBEAT_MAX_CLIENT_AGE=1m
+    networks:
+      - burrow_network
+    # The server will use programmatic configuration from main.go
+    command: ["/app/server"]
+
+volumes:
+  mariadb_data:
+  rabbitmq_data:
+
+networks:
+  burrow_network:
+    driver: bridge 

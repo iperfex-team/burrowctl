@@ -22,6 +22,10 @@ func main() {
 		concurrent      = flag.Int("concurrent", 5, "Number of concurrent connections for stress test")
 		requests        = flag.Int("requests", 50, "Number of requests per connection for stress test")
 		reconnectDemo   = flag.Bool("reconnect-demo", false, "Demonstrate automatic reconnection")
+		longQueryDemo   = flag.Bool("long-query", false, "Demonstrate long-running queries and client disconnection")
+		queryDuration   = flag.Duration("query-duration", 30*time.Second, "Duration for long-running query simulation")
+		disconnectAfter = flag.Duration("disconnect-after", 10*time.Second, "Time to wait before simulating client disconnection")
+		concurrentLong  = flag.Int("concurrent-long", 3, "Number of concurrent long-running queries")
 		showHelp        = flag.Bool("help", false, "Show this help message")
 	)
 	flag.Parse()
@@ -51,6 +55,8 @@ func main() {
 		runStressTest(dsn, *concurrent, *requests)
 	case *reconnectDemo:
 		runReconnectDemo(dsn)
+	case *longQueryDemo:
+		runLongQueryDemo(dsn, *queryDuration, *disconnectAfter, *concurrentLong)
 	case *usePrepared:
 		runPreparedStatementsDemo(dsn)
 	default:
@@ -67,6 +73,7 @@ func showAdvancedHelp() {
 	fmt.Println("• ⚡ Prepared Statements - Better performance and security")
 	fmt.Println("• 🏗️  Worker Pool - Concurrent processing on server")
 	fmt.Println("• 🛡️  Rate Limiting - Protection against abuse")
+	fmt.Println("• ⏱️  Long Query Simulation - Test client disconnection detection")
 	fmt.Println()
 	fmt.Println("Usage:")
 	fmt.Println("  go run advanced-main.go [options]")
@@ -81,6 +88,10 @@ func showAdvancedHelp() {
 	fmt.Println("  -concurrent int   Concurrent connections for stress test (default: 5)")
 	fmt.Println("  -requests int     Requests per connection (default: 50)")
 	fmt.Println("  -reconnect-demo   Demonstrate automatic reconnection")
+	fmt.Println("  -long-query       Demonstrate long-running queries and client disconnection")
+	fmt.Println("  -query-duration   Duration for long-running query simulation (default: 30s)")
+	fmt.Println("  -disconnect-after Time to wait before simulating client disconnection (default: 10s)")
+	fmt.Println("  -concurrent-long  Number of concurrent long-running queries (default: 3)")
 	fmt.Println("  -help             Show this help")
 	fmt.Println()
 	fmt.Println("Examples:")
@@ -95,6 +106,9 @@ func showAdvancedHelp() {
 	fmt.Println()
 	fmt.Println("  # Reconnection demo")
 	fmt.Println("  go run advanced-main.go -reconnect-demo")
+	fmt.Println()
+	fmt.Println("  # Long query demo with client disconnection")
+	fmt.Println("  go run advanced-main.go -long-query -query-duration=45s -disconnect-after=15s")
 	fmt.Println()
 	fmt.Println("  # Custom configuration")
 	fmt.Println("  go run advanced-main.go -device=mydevice -amqp=amqp://user:pass@host:5672/ -timeout=1m")
@@ -161,7 +175,7 @@ func runPreparedStatementsDemo(dsn string) {
 
 	for i, params := range testData {
 		fmt.Printf("\n📋 Execution %d with params: %v\n", i+1, params)
-		
+
 		start := time.Now()
 		rows, err := stmt.Query(params...)
 		if err != nil {
@@ -171,7 +185,7 @@ func runPreparedStatementsDemo(dsn string) {
 
 		printResults(rows)
 		rows.Close()
-		
+
 		fmt.Printf("⏱️  Execution %d completed in: %v\n", i+1, time.Since(start))
 	}
 
@@ -217,8 +231,8 @@ func runStressTest(dsn string, concurrent int, requests int) {
 		}
 
 		fmt.Printf("   %-3d | %-7d | %-6d | %-12d | %8v\n",
-			result.WorkerID, 
-			result.TotalRequests-result.Errors, 
+			result.WorkerID,
+			result.TotalRequests-result.Errors,
 			result.Errors,
 			result.RateLimited,
 			avgTime)
@@ -230,7 +244,7 @@ func runStressTest(dsn string, concurrent int, requests int) {
 	fmt.Printf("❌ Total Errors: %d\n", totalErrors)
 	fmt.Printf("🛡️  Rate Limited: %d\n", rateLimited)
 	fmt.Printf("⏱️  Average Response Time: %v\n", totalDuration/time.Duration(totalRequests))
-	
+
 	if rateLimited > 0 {
 		fmt.Println()
 		fmt.Println("🎯 Rate Limiting Demonstration Successful!")
@@ -265,10 +279,10 @@ func stressWorker(dsn string, workerID, requests int, resultChan chan<- TestResu
 
 	for i := 0; i < requests; i++ {
 		start := time.Now()
-		
+
 		// Update query with current request number
 		currentQuery := fmt.Sprintf("SELECT 'Worker %d' as worker, %d as request_num", workerID, i+1)
-		
+
 		rows, err := db.Query(currentQuery)
 		duration := time.Since(start)
 		totalDuration += duration
@@ -312,10 +326,10 @@ func runReconnectDemo(dsn string) {
 	// Run queries with intervals to demonstrate persistent connection
 	for i := 1; i <= 10; i++ {
 		fmt.Printf("📊 Query %d/10: Testing connection...\n", i)
-		
+
 		start := time.Now()
 		testQuery := fmt.Sprintf("SELECT 'Reconnection Test' as test, %d as iteration, NOW() as timestamp", i)
-		
+
 		rows, err := db.Query(testQuery)
 		if err != nil {
 			fmt.Printf("❌ Query %d failed: %v\n", i, err)
@@ -344,6 +358,119 @@ func runReconnectDemo(dsn string) {
 	fmt.Println("   • Automatic reconnection with exponential backoff")
 	fmt.Println("   • Connection health monitoring")
 	fmt.Println("   • Transparent error handling")
+}
+
+func runLongQueryDemo(dsn string, queryDuration, disconnectAfter time.Duration, concurrentQueries int) {
+	fmt.Println("🎯 Running Long Query Demo (Client Disconnection Test)")
+	fmt.Println("----------------------------------------------------")
+	fmt.Printf("⏱️  Query Duration: %v\n", queryDuration)
+	fmt.Printf("🔌 Disconnect After: %v\n", disconnectAfter)
+	fmt.Printf("🔄 Concurrent Queries: %d\n", concurrentQueries)
+	fmt.Println()
+
+	db, err := sql.Open("rabbitsql", dsn)
+	if err != nil {
+		log.Fatal("❌ Error connecting:", err)
+	}
+	defer db.Close()
+
+	fmt.Println("🚀 Starting long-running query simulation...")
+	fmt.Println("   This will simulate a query that takes a long time to complete")
+	fmt.Println("   The client will disconnect before the query finishes")
+	fmt.Println("   This tests the server's ability to detect client disconnections")
+	fmt.Println()
+
+	// Create a channel to signal when to disconnect
+	disconnectChan := make(chan struct{})
+
+	// Start a goroutine to simulate client disconnection
+	go func() {
+		time.Sleep(disconnectAfter)
+		fmt.Printf("\n🔌 Simulating client disconnection after %v...\n", disconnectAfter)
+		fmt.Println("   Closing database connection...")
+		close(disconnectChan)
+	}()
+
+	// Start multiple long-running queries
+	fmt.Printf("📊 Executing %d concurrent long-running queries (will take %v each)...\n", concurrentQueries, queryDuration)
+
+	// Use a query that will take a long time on the server
+	longQuery := fmt.Sprintf("SELECT SLEEP(%d) as sleep_result, 'Long running query' as description, NOW() as start_time", int(queryDuration.Seconds()))
+
+	start := time.Now()
+
+	// Execute multiple queries in goroutines
+	queryDone := make(chan error, concurrentQueries)
+	for i := 0; i < concurrentQueries; i++ {
+		go func(queryID int) {
+			fmt.Printf("🚀 Starting query %d/%d...\n", queryID+1, concurrentQueries)
+			rows, err := db.Query(longQuery)
+			if err != nil {
+				queryDone <- fmt.Errorf("query %d failed: %v", queryID+1, err)
+				return
+			}
+			defer rows.Close()
+
+			// Try to read results (this will likely fail due to disconnection)
+			if rows.Next() {
+				var sleepResult, description, startTime string
+				if err := rows.Scan(&sleepResult, &description, &startTime); err != nil {
+					queryDone <- fmt.Errorf("query %d scan failed: %v", queryID+1, err)
+					return
+				}
+				fmt.Printf("✅ Query %d completed successfully: %s, %s, %s\n", queryID+1, sleepResult, description, startTime)
+			}
+			queryDone <- nil
+		}(i)
+	}
+
+	// Wait for either disconnection or query completion
+	select {
+	case <-disconnectChan:
+		fmt.Println("🔌 Client disconnection simulated!")
+		fmt.Println("   The server should detect this disconnection and clean up resources")
+		fmt.Println("   Any orphaned operations should be cancelled")
+
+		// Close the database connection
+		db.Close()
+
+		// Wait a bit to see if the server detects the disconnection
+		fmt.Println("⏳ Waiting to see server response...")
+		time.Sleep(5 * time.Second)
+
+	default:
+		// Wait for all queries to complete or timeout
+		completed := 0
+		errors := 0
+		for i := 0; i < concurrentQueries; i++ {
+			select {
+			case err := <-queryDone:
+				if err != nil {
+					fmt.Printf("❌ Query failed: %v\n", err)
+					errors++
+				} else {
+					completed++
+				}
+			case <-time.After(queryDuration + 5*time.Second):
+				fmt.Printf("⏰ Query %d timed out\n", i+1)
+			}
+		}
+		fmt.Printf("📊 Results: %d completed, %d errors\n", completed, errors)
+		fmt.Printf("⏱️  Total time: %v\n", time.Since(start))
+	}
+
+	fmt.Println()
+	fmt.Println("🎯 Long Query Demo Completed!")
+	fmt.Println("💡 What to check on the server:")
+	fmt.Println("   • Look for heartbeat timeout messages")
+	fmt.Println("   • Check if orphaned operations were cancelled")
+	fmt.Println("   • Verify client cleanup in server logs")
+	fmt.Println("   • Monitor heartbeat statistics")
+	fmt.Println()
+	fmt.Println("💡 Server-side monitoring commands:")
+	fmt.Println("   • Check heartbeat stats: SELECT * FROM getHeartbeatStats()")
+	fmt.Println("   • Check active clients: SELECT * FROM getActiveClients()")
+	fmt.Println("   • Check system status: SELECT * FROM getSystemStatus()")
 }
 
 func printResults(rows *sql.Rows) {

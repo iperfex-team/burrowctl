@@ -25,6 +25,8 @@ type PoolConfig struct {
 // - Functions are registered dynamically rather than hardcoded
 // - Connection management is configurable (pooled vs per-query)
 // - Concurrent message processing through worker pools
+// - Heartbeat management for connection monitoring
+// - Separate queues for RPC and heartbeat operations
 type Handler struct {
 	deviceID           string                 // Unique identifier for this device/server instance
 	amqpURL            string                 // RabbitMQ connection URL (amqp://user:pass@host:port/)
@@ -39,6 +41,13 @@ type Handler struct {
 	transactionManager *TransactionManager    // Transaction manager for handling database transactions
 	queryCache         *QueryCache            // Query cache for improving performance of repeated queries
 	sqlValidator       *SQLValidator          // SQL validator for security and policy enforcement
+
+	// Heartbeat management
+	heartbeatManager *ServerHeartbeatManager // Heartbeat manager for connection monitoring
+
+	// Queue management
+	rpcQueueName       string // RPC queue name for this device
+	heartbeatQueueName string // Heartbeat queue name for this device
 }
 
 // FunctionParam represents a single parameter for function execution.
@@ -54,7 +63,6 @@ type FunctionRequest struct {
 	Name   string          `json:"name"`   // Name of the function to execute
 	Params []FunctionParam `json:"params"` // Array of parameters with type information
 }
-
 
 // RPCRequest represents an incoming request from a client.
 // It contains all necessary information to process SQL queries, function calls, or system commands.

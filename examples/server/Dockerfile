@@ -1,7 +1,5 @@
-# Universal Dockerfile for all burrowctl server examples
-# Usage: docker build --build-arg EXAMPLE_DIR=basic -t burrowctl-server-basic .
-# Usage: docker build --build-arg EXAMPLE_DIR=advanced -t burrowctl-server-advanced .
-# Usage: docker build --build-arg EXAMPLE_DIR=advanced/cache-server -t burrowctl-server-cache .
+# Universal Dockerfile for burrowctl server
+# Builds the main server from examples/server/
 
 # Multi-stage build for optimal image size
 FROM golang:1.22-alpine AS builder
@@ -12,19 +10,21 @@ RUN apk add --no-cache git
 # Set working directory
 WORKDIR /app
 
-# Copy go mod files from root
+# Copy the main module files
 COPY go.mod go.sum ./
+COPY client ./client
+COPY server ./server
+
+# Copy the server example files
+COPY examples/server/main.go ./
+
+RUN ls -la
+
 RUN go mod download
 
-# Copy source code
-COPY . .
-
-# Build argument to specify which example to build
-ARG EXAMPLE_DIR=basic
-ENV EXAMPLE_DIR=${EXAMPLE_DIR}
-
-# Build the specific example
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o server ./examples/server/${EXAMPLE_DIR}/main.go
+# Build the server
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o server main.go
+RUN ls -la server
 
 # Production stage
 FROM alpine:latest
@@ -39,20 +39,10 @@ RUN addgroup -g 1001 -S burrowctl && \
 WORKDIR /app
 
 # Copy binary from builder
-COPY --from=builder /app/server .
-
-# Change ownership to non-root user
-RUN chown burrowctl:burrowctl /app/server
+COPY --from=builder --chown=burrowctl:burrowctl /app/server .
 
 # Switch to non-root user
 USER burrowctl
-
-# Expose port
-EXPOSE 8080
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
 
 # Default command
 CMD ["./server"]

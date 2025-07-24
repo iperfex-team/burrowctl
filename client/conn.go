@@ -23,12 +23,18 @@ import (
 // - Device ID for routing messages to the correct server
 // - Configuration including timeouts and debug settings
 // - Query execution context and error handling
+// - Heartbeat manager for connection monitoring
 type Conn struct {
 	deviceID       string             // Target device/server identifier
 	connMgr        *ConnectionManager // Connection manager with automatic reconnection
 	config         *DSNConfig         // Parsed DSN configuration
 	currentTx      *Tx                // Current active transaction (if any)
 	transactionMux sync.RWMutex       // Mutex for transaction state
+
+	// Heartbeat management
+	heartbeatManager *HeartbeatManager // Heartbeat manager for connection monitoring
+	rpcActive        bool              // Whether RPC is currently active
+	rpcMutex         sync.RWMutex      // Mutex for RPC state
 }
 
 // logf provides conditional debug logging based on the configuration.
@@ -78,6 +84,12 @@ func (c *Conn) Prepare(query string) (driver.Stmt, error) {
 //   - error: Any error that occurred during connection closure
 func (c *Conn) Close() error {
 	c.logf("Closing connection to RabbitMQ")
+
+	// Stop heartbeat manager if active
+	if c.heartbeatManager != nil {
+		c.heartbeatManager.Stop()
+	}
+
 	return c.connMgr.Close()
 }
 
@@ -112,65 +124,49 @@ func (c *Conn) Begin() (driver.Tx, error) {
 	return tx, nil
 }
 
-// Query implements the driver.Conn interface for executing queries with arguments.
-// This method converts driver.Value arguments to driver.NamedValue and delegates
-// to QueryContext with a timeout context.
+// Query implements the driver.Conn interface and executes a query with parameters.
+// It supports parameter binding for security and type safety.
 //
 // Parameters:
-//   - query: SQL query, function call, or system command
-//   - args: Query arguments as driver.Value slice
+//   - query: SQL query string with parameter placeholders (?)
+//   - args: Query parameters to bind to placeholders
 //
 // Returns:
-//   - driver.Rows: Result set from the query execution
+//   - driver.Rows: Result set from the query
 //   - error: Any error that occurred during query execution
 func (c *Conn) Query(query string, args []driver.Value) (driver.Rows, error) {
-	startTotal := time.Now()
-	c.logf("Executing query: %s", query)
+	c.logf("Executing query: %s with %d parameters", query, len(args))
+
+	// Convert driver.Value to driver.NamedValue for consistency
+	namedArgs := make([]driver.NamedValue, len(args))
+	for i, arg := range args {
+		namedArgs[i] = driver.NamedValue{Name: "", Ordinal: i + 1, Value: arg}
+	}
 
 	// Create timeout context based on configuration
 	ctx, cancel := context.WithTimeout(context.Background(), c.config.Timeout)
 	defer cancel()
 
-	// Convert driver.Value arguments to driver.NamedValue format
-	named := make([]driver.NamedValue, len(args))
-	for i, v := range args {
-		named[i] = driver.NamedValue{Ordinal: i + 1, Value: v}
-	}
-
-	// Execute query through RPC
-	rows, err := c.queryRPC(ctx, query, named)
-
-	// Log total execution time if debug enabled
-	total := time.Since(startTotal)
-	c.logf("total time: %v", total)
-
-	return rows, err
+	// Execute query through RPC with heartbeat activation
+	return c.queryRPCWithHeartbeat(ctx, query, namedArgs)
 }
 
-// QueryContext implements the driver.ConnContext interface for context-aware query execution.
-// This is the primary method for executing all types of operations (SQL, functions, commands)
-// with proper timeout and cancellation support.
+// QueryContext implements the driver.QueryerContext interface and executes a query
+// with parameters using a context for cancellation and timeout control.
 //
 // Parameters:
 //   - ctx: Context for cancellation and timeout control
-//   - query: SQL query, function call, or system command
-//   - args: Query arguments as driver.NamedValue slice
+//   - query: SQL query string with parameter placeholders (?)
+//   - args: Query parameters to bind to placeholders
 //
 // Returns:
-//   - driver.Rows: Result set from the query execution
+//   - driver.Rows: Result set from the query
 //   - error: Any error that occurred during query execution
 func (c *Conn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
-	startTotal := time.Now()
-	c.logf("Executing query (Context): %s", query)
+	c.logf("Executing query with context: %s with %d parameters", query, len(args))
 
-	// Execute query through RPC
-	rows, err := c.queryRPC(ctx, query, args)
-
-	// Log total execution time if debug enabled
-	total := time.Since(startTotal)
-	c.logf("total time (QueryContext): %v", total)
-
-	return rows, err
+	// Execute query through RPC with heartbeat activation
+	return c.queryRPCWithHeartbeat(ctx, query, args)
 }
 
 // getOutboundIP determines the client's outbound IP address by establishing
@@ -223,24 +219,45 @@ func parseCommand(query string) (cmdType string, actualQuery string) {
 	return "sql", query
 }
 
-// queryRPC executes a query through the RabbitMQ RPC mechanism.
-// This is the core method that handles the complete request-response cycle
-// including message routing, timeout handling, and response processing.
-//
-// The method implements the RabbitMQ RPC pattern:
-// 1. Creates a temporary reply queue for receiving responses
-// 2. Publishes the query to the device-specific queue
-// 3. Waits for the response with timeout handling
-// 4. Processes and validates the response
-//
-// Parameters:
-//   - ctx: Context for cancellation and timeout control
-//   - query: The query string (SQL, function call, or command)
-//   - args: Query arguments as driver.NamedValue slice
-//
-// Returns:
-//   - driver.Rows: Result set containing query results
-//   - error: Any error that occurred during RPC execution
+// queryRPCWithHeartbeat executes RPC with heartbeat activation
+func (c *Conn) queryRPCWithHeartbeat(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
+	// Activate heartbeat at the start of RPC
+	c.activateHeartbeat()
+	defer c.deactivateHeartbeat()
+
+	// Execute the actual RPC
+	return c.queryRPC(ctx, query, args)
+}
+
+// activateHeartbeat activates the heartbeat when RPC is active
+func (c *Conn) activateHeartbeat() {
+	c.rpcMutex.Lock()
+	defer c.rpcMutex.Unlock()
+
+	if !c.rpcActive {
+		c.rpcActive = true
+		if c.heartbeatManager != nil {
+			c.heartbeatManager.ActivateHeartbeat()
+		}
+		c.logf("RPC activated, heartbeat enabled")
+	}
+}
+
+// deactivateHeartbeat deactivates the heartbeat when RPC is not active
+func (c *Conn) deactivateHeartbeat() {
+	c.rpcMutex.Lock()
+	defer c.rpcMutex.Unlock()
+
+	if c.rpcActive {
+		c.rpcActive = false
+		if c.heartbeatManager != nil {
+			c.heartbeatManager.DeactivateHeartbeat()
+		}
+		c.logf("RPC deactivated, heartbeat disabled")
+	}
+}
+
+// queryRPC sends a query to the server via RabbitMQ RPC using separate RPC queue
 func (c *Conn) queryRPC(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	// Get current connection from connection manager
 	conn, err := c.connMgr.GetConnection()
@@ -272,11 +289,11 @@ func (c *Conn) queryRPC(ctx context.Context, query string, args []driver.NamedVa
 
 	// Build RPC request message
 	req := map[string]interface{}{
-		"type":     cmdType,                // Query type: sql, function, or command
-		"deviceID": c.deviceID,             // Target device identifier
-		"query":    actualQuery,            // Actual query without prefix
-		"params":   argsToSlice(args),      // Query parameters
-		"clientIP": getOutboundIP(),        // Client IP for logging
+		"type":     cmdType,           // Query type: sql, function, or command
+		"deviceID": c.deviceID,        // Target device identifier
+		"query":    actualQuery,       // Actual query without prefix
+		"params":   argsToSlice(args), // Query parameters
+		"clientIP": getOutboundIP(),   // Client IP for logging
 	}
 
 	// Include transaction information if we're in a transaction
@@ -291,19 +308,20 @@ func (c *Conn) queryRPC(ctx context.Context, query string, args []driver.NamedVa
 	body, _ := json.Marshal(req)
 
 	startRT := time.Now()
-	c.logf("Publishing query to device queue '%s'", c.deviceID)
+	c.logf("Publishing query to device RPC queue '%s'", c.deviceID)
 
-	// Publish query to device-specific queue with RPC headers
-	err = ch.PublishWithContext(ctx, "", c.deviceID, false, false, amqp.Publishing{
+	// Publish query to device-specific RPC queue (separate from heartbeat)
+	rpcQueueName := fmt.Sprintf("device_%s_rpc", c.deviceID)
+	err = ch.PublishWithContext(ctx, "", rpcQueueName, false, false, amqp.Publishing{
 		ContentType:   "application/json", // JSON content type
 		CorrelationId: corrID,             // For matching request/response
 		ReplyTo:       replyQueue.Name,    // Where to send the response
 		Body:          body,               // Serialized request
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to publish query to device queue '%s': %v\nPlease check:\n- Server is running\n- Device ID '%s' is correct\n- Queue exists", c.deviceID, err, c.deviceID)
+		return nil, fmt.Errorf("failed to publish query to device RPC queue '%s': %v\nPlease check:\n- Server is running\n- Device ID '%s' is correct\n- Queue exists", rpcQueueName, err, c.deviceID)
 	}
-	c.logf("Query published, waiting for response...")
+	c.logf("Query published to RPC queue, waiting for response...")
 
 	// Start consuming from reply queue
 	msgs, err := ch.Consume(replyQueue.Name, "", true, true, false, false, nil)
@@ -369,4 +387,37 @@ func (c *Conn) clearFinishedTransaction() {
 		c.logf("Clearing finished transaction: %s", c.currentTx.GetTransactionID())
 		c.currentTx = nil
 	}
+}
+
+// setupHeartbeat initializes the heartbeat manager
+func (c *Conn) setupHeartbeat() {
+	if c.config.HeartbeatEnabled {
+		c.heartbeatManager = NewHeartbeatManager(
+			c.connMgr,
+			c.deviceID,
+			getOutboundIP(),
+			c.config.HeartbeatConfig,
+		)
+		c.heartbeatManager.SetCallbacks(c.handleDisconnect, c.handleReconnect)
+	}
+}
+
+// handleDisconnect callback for heartbeat manager
+func (c *Conn) handleDisconnect(err error) {
+	c.logf("Connection considered dead: %v", err)
+	// Trigger reconnection
+	c.connMgr.Reconnect()
+}
+
+// handleReconnect callback for heartbeat manager
+func (c *Conn) handleReconnect() {
+	c.logf("Connection restored")
+}
+
+// GetHeartbeatStats returns heartbeat statistics
+func (c *Conn) GetHeartbeatStats() HeartbeatStats {
+	if c.heartbeatManager != nil {
+		return c.heartbeatManager.GetStats()
+	}
+	return HeartbeatStats{}
 }

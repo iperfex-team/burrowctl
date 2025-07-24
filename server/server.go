@@ -77,10 +77,17 @@ func NewHandler(deviceID, amqpURL, mysqlDSN, mode string, poolConf *PoolConfig) 
 		mysqlDSN:           mysqlDSN,
 		mode:               mode,
 		poolConf:           *poolConf,
-		functionRegistry:   make(map[string]interface{}),             // Initialize empty function registry
-		transactionManager: NewTransactionManager(),                  // Initialize transaction manager
-		queryCache:         NewQueryCache(DefaultQueryCacheConfig()), // Initialize query cache
+		functionRegistry:   make(map[string]interface{}),                  // Initialize empty function registry
+		transactionManager: NewTransactionManager(),                       // Initialize transaction manager
+		queryCache:         NewQueryCache(DefaultQueryCacheConfig()),      // Initialize query cache
 		sqlValidator:       NewSQLValidator(DefaultSQLValidationConfig()), // Initialize SQL validator
+
+		// Initialize heartbeat manager
+		heartbeatManager: NewServerHeartbeatManager(deviceID, DefaultServerHeartbeatConfig()),
+
+		// Initialize queue names
+		rpcQueueName:       fmt.Sprintf("device_%s_rpc", deviceID),
+		heartbeatQueueName: fmt.Sprintf("device_%s_heartbeat", deviceID),
 	}
 
 	// Initialize worker pool with default configuration
@@ -195,29 +202,47 @@ func (h *Handler) Start(ctx context.Context) error {
 	}
 	defer ch.Close()
 
-	// Declare device-specific queue before consuming
-	// This ensures the queue exists and is ready to receive messages
+	// Declare RPC queue for this device
 	_, err = ch.QueueDeclare(
-		h.deviceID, // name - queue name using device ID for uniqueness
-		false,      // durable - non-persistent (lost if RabbitMQ restarts)
-		false,      // delete when unused - keep queue active
-		false,      // exclusive - allow multiple consumers
-		false,      // no-wait - wait for server confirmation
-		nil,        // arguments - no additional arguments
+		h.rpcQueueName, // name - RPC queue name using device ID for uniqueness
+		false,          // durable - non-persistent (lost if RabbitMQ restarts)
+		false,          // delete when unused - keep queue active
+		false,          // exclusive - allow multiple consumers
+		false,          // no-wait - wait for server confirmation
+		nil,            // arguments - no additional arguments
 	)
 	if err != nil {
-		return fmt.Errorf("failed to declare queue: %w", err)
+		return fmt.Errorf("failed to declare RPC queue: %w", err)
 	}
 
-	log.Printf("[server] Queue '%s' declared successfully", h.deviceID)
+	// Declare heartbeat queue for this device
+	_, err = ch.QueueDeclare(
+		h.heartbeatQueueName, // name - heartbeat queue name using device ID for uniqueness
+		false,                // durable - non-persistent (lost if RabbitMQ restarts)
+		false,                // delete when unused - keep queue active
+		false,                // exclusive - allow multiple consumers
+		false,                // no-wait - wait for server confirmation
+		nil,                  // arguments - no additional arguments
+	)
+	if err != nil {
+		return fmt.Errorf("failed to declare heartbeat queue: %w", err)
+	}
 
-	// Start consuming messages from the device queue
-	msgs, err := ch.Consume(h.deviceID, "", true, true, false, false, nil)
+	log.Printf("[server] Queues '%s' and '%s' declared successfully", h.rpcQueueName, h.heartbeatQueueName)
+
+	// Start consuming messages from the RPC queue
+	rpcMsgs, err := ch.Consume(h.rpcQueueName, "", true, true, false, false, nil)
 	if err != nil {
 		return err
 	}
 
-	log.Printf("[server] Listening on queue %s", h.deviceID)
+	// Start consuming messages from the heartbeat queue
+	heartbeatMsgs, err := ch.Consume(h.heartbeatQueueName, "", true, true, false, false, nil)
+	if err != nil {
+		return err
+	}
+
+	log.Printf("[server] Listening on RPC queue %s and heartbeat queue %s", h.rpcQueueName, h.heartbeatQueueName)
 
 	// Start the worker pool for concurrent message processing
 	if err := h.workerPool.Start(); err != nil {
@@ -225,6 +250,10 @@ func (h *Handler) Start(ctx context.Context) error {
 	}
 	defer h.workerPool.Stop(10 * time.Second) // 10 second shutdown timeout
 	defer h.rateLimiter.Stop()                // Stop rate limiter cleanup goroutine
+
+	// Start heartbeat manager
+	h.heartbeatManager.Start()
+	defer h.heartbeatManager.Stop()
 
 	// Start transaction cleanup goroutine
 	go h.transactionCleanupLoop(ctx)
@@ -236,8 +265,8 @@ func (h *Handler) Start(ctx context.Context) error {
 			// Context cancelled, shut down gracefully
 			log.Printf("[server] Shutting down server...")
 			return nil
-		case msg := <-msgs:
-			// Submit message to worker pool instead of processing directly
+		case msg := <-rpcMsgs:
+			// Submit RPC message to worker pool
 			task := MessageTask{
 				Channel:   ch,
 				Message:   msg,
@@ -245,7 +274,7 @@ func (h *Handler) Start(ctx context.Context) error {
 			}
 
 			if err := h.workerPool.SubmitTask(task); err != nil {
-				log.Printf("[server] Failed to submit task to worker pool: %v", err)
+				log.Printf("[server] Failed to submit RPC task to worker pool: %v", err)
 				// Send error response directly if worker pool fails
 				errorResp := RPCResponse{Error: "Server overloaded, please try again"}
 				if body, marshalErr := json.Marshal(errorResp); marshalErr == nil {
@@ -256,6 +285,9 @@ func (h *Handler) Start(ctx context.Context) error {
 					})
 				}
 			}
+		case msg := <-heartbeatMsgs:
+			// Process heartbeat message directly (high priority)
+			h.heartbeatManager.HandleHeartbeatPing(ch, msg)
 		}
 	}
 }
@@ -301,6 +333,10 @@ func (h *Handler) handleMessage(ch *amqp.Channel, msg amqp.Delivery) {
 	case "transaction":
 		h.handleTransaction(ch, msg, req)
 
+	case "heartbeat_ping":
+		// Handle heartbeat ping (should be processed by heartbeat manager)
+		h.heartbeatManager.HandleHeartbeatPing(ch, msg)
+
 	default:
 		h.respond(ch, msg.ReplyTo, msg.CorrelationId, RPCResponse{
 			Error: fmt.Sprintf("unsupported type: %s", req.Type),
@@ -333,7 +369,7 @@ func (h *Handler) handleSQL(ch *amqp.Channel, msg amqp.Delivery, req RPCRequest)
 	if !validationResult.Valid {
 		// Query failed validation, return error
 		errorMsg := fmt.Sprintf("SQL validation failed: %s", strings.Join(validationResult.Errors, "; "))
-		log.Printf("[server] SQL validation blocked query from %s: %s (risk: %s)", 
+		log.Printf("[server] SQL validation blocked query from %s: %s (risk: %s)",
 			req.ClientIP, truncateQuery(req.Query, 50), validationResult.Risk)
 		h.respond(ch, msg.ReplyTo, msg.CorrelationId, RPCResponse{Error: errorMsg})
 		return
@@ -1066,6 +1102,16 @@ func (h *Handler) GetSQLValidationStats() ValidationStats {
 // SetSQLValidationConfig updates the SQL validation configuration.
 func (h *Handler) SetSQLValidationConfig(config SQLValidationConfig) {
 	h.sqlValidator.UpdateConfig(config)
-	log.Printf("[server] SQL validation configuration updated: enabled=%v, strict=%v", 
+	log.Printf("[server] SQL validation configuration updated: enabled=%v, strict=%v",
 		config.Enabled, config.StrictMode)
+}
+
+// GetHeartbeatStats returns heartbeat statistics
+func (h *Handler) GetHeartbeatStats() ServerHeartbeatStats {
+	return h.heartbeatManager.GetStats()
+}
+
+// GetActiveClients returns information about active client connections
+func (h *Handler) GetActiveClients() map[string]*ClientHeartbeatInfo {
+	return h.heartbeatManager.GetActiveClients()
 }

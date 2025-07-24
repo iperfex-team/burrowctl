@@ -12,45 +12,45 @@ import (
 // ReconnectConfig holds configuration for automatic reconnection behavior.
 // These settings control how the client handles connection failures and recovery.
 type ReconnectConfig struct {
-	Enabled          bool          // Whether automatic reconnection is enabled
-	MaxAttempts      int           // Maximum number of reconnection attempts (0 = unlimited)
-	InitialInterval  time.Duration // Initial wait time between reconnection attempts
-	MaxInterval      time.Duration // Maximum wait time between reconnection attempts  
+	Enabled           bool          // Whether automatic reconnection is enabled
+	MaxAttempts       int           // Maximum number of reconnection attempts (0 = unlimited)
+	InitialInterval   time.Duration // Initial wait time between reconnection attempts
+	MaxInterval       time.Duration // Maximum wait time between reconnection attempts
 	BackoffMultiplier float64       // Multiplier for exponential backoff (e.g., 2.0)
-	ResetInterval    time.Duration // Time after which to reset backoff to initial interval
+	ResetInterval     time.Duration // Time after which to reset backoff to initial interval
 }
 
 // DefaultReconnectConfig returns a sensible default reconnection configuration.
 func DefaultReconnectConfig() *ReconnectConfig {
 	return &ReconnectConfig{
 		Enabled:           true,
-		MaxAttempts:       10,                // Try up to 10 times
-		InitialInterval:   1 * time.Second,   // Start with 1 second
-		MaxInterval:       60 * time.Second,  // Cap at 60 seconds
-		BackoffMultiplier: 2.0,               // Double each time
-		ResetInterval:     5 * time.Minute,   // Reset after 5 minutes of success
+		MaxAttempts:       10,               // Try up to 10 times
+		InitialInterval:   1 * time.Second,  // Start with 1 second
+		MaxInterval:       60 * time.Second, // Cap at 60 seconds
+		BackoffMultiplier: 2.0,              // Double each time
+		ResetInterval:     5 * time.Minute,  // Reset after 5 minutes of success
 	}
 }
 
 // ConnectionManager handles automatic reconnection for RabbitMQ connections.
 // It provides transparent reconnection with exponential backoff and connection health monitoring.
 type ConnectionManager struct {
-	config       *ReconnectConfig // Reconnection configuration
-	dsn          string           // Original DSN for reconnection
-	conn         *amqp.Connection // Current connection (nil if disconnected)
-	connConfig   *DSNConfig       // Parsed DSN configuration
-	
+	config     *ReconnectConfig // Reconnection configuration
+	dsn        string           // Original DSN for reconnection
+	conn       *amqp.Connection // Current connection (nil if disconnected)
+	connConfig *DSNConfig       // Parsed DSN configuration
+
 	// State management
-	mutex           sync.RWMutex   // Protects connection state
-	isConnected     bool           // Current connection status
-	lastConnected   time.Time      // Last successful connection time
-	attempts        int            // Current number of reconnection attempts
-	nextInterval    time.Duration  // Next reconnection interval
-	lastError       error          // Last connection error
-	
+	mutex         sync.RWMutex  // Protects connection state
+	isConnected   bool          // Current connection status
+	lastConnected time.Time     // Last successful connection time
+	attempts      int           // Current number of reconnection attempts
+	nextInterval  time.Duration // Next reconnection interval
+	lastError     error         // Last connection error
+
 	// Callbacks
-	onConnected    func()          // Called when connection is established
-	onDisconnected func(error)     // Called when connection is lost
+	onConnected    func()      // Called when connection is established
+	onDisconnected func(error) // Called when connection is lost
 }
 
 // NewConnectionManager creates a new connection manager with the specified configuration.
@@ -134,7 +134,7 @@ func (cm *ConnectionManager) monitorConnection() {
 
 	// Wait for connection to close
 	closeErr := <-cm.conn.NotifyClose(make(chan *amqp.Error))
-	
+
 	cm.mutex.Lock()
 	defer cm.mutex.Unlock()
 
@@ -180,7 +180,7 @@ func (cm *ConnectionManager) reconnectLoop() {
 		time.Sleep(cm.nextInterval)
 
 		cm.mutex.Lock()
-		
+
 		// Check if connection was restored by another goroutine
 		if cm.isConnected {
 			cm.mutex.Unlock()
@@ -266,7 +266,7 @@ func (cm *ConnectionManager) Close() error {
 func (cm *ConnectionManager) SetCallbacks(onConnected func(), onDisconnected func(error)) {
 	cm.mutex.Lock()
 	defer cm.mutex.Unlock()
-	
+
 	cm.onConnected = onConnected
 	cm.onDisconnected = onDisconnected
 }
@@ -292,6 +292,26 @@ func (cm *ConnectionManager) GetStats() ConnectionStats {
 		LastError:       cm.lastError,
 		NextReconnectIn: cm.nextInterval,
 	}
+}
+
+// Reconnect manually triggers a reconnection attempt.
+// This is useful when the heartbeat manager detects connection issues.
+//
+// Returns:
+//   - error: Any error that occurred during reconnection
+func (cm *ConnectionManager) Reconnect() error {
+	cm.mutex.Lock()
+	defer cm.mutex.Unlock()
+
+	// Reset connection state
+	cm.isConnected = false
+	if cm.conn != nil {
+		cm.conn.Close()
+		cm.conn = nil
+	}
+
+	// Attempt to reconnect
+	return cm.doConnect()
 }
 
 // ConnectionStats contains statistics about the connection state.
